@@ -1,0 +1,209 @@
+# example_slideshow.yaml
+# Complete example configuration for ESPHome slideshow component
+
+esphome:
+  name: living-room-display
+  platform: ESP32
+  board: esp32-s3-devkitc-1
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Required for online_image
+http_request:
+  timeout: 10s
+  useragent: esphome/slideshow
+
+# Placeholder image shown while downloading
+image:
+  - file: "loading.png"
+    id: loading_placeholder
+    type: RGB565
+    resize: 600x1024
+
+# Create 3 online_image slots for the slideshow
+# These will be dynamically loaded/unloaded as the slideshow advances
+online_image:
+  - url: ""  # URL will be set dynamically
+    id: slide_slot_0
+    type: RGB565
+    resize: 600x1024
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          bool cached = x;  // x is true if loaded from cache
+          id(my_slideshow).on_image_ready(0, cached);
+    on_error:
+      - lambda: |-
+          id(my_slideshow).on_image_error(0);
+
+  - url: ""
+    id: slide_slot_1
+    type: RGB565
+    resize: 600x1024
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(my_slideshow).on_image_ready(1, x);
+    on_error:
+      - lambda: |-
+          id(my_slideshow).on_image_error(1);
+
+  - url: ""
+    id: slide_slot_2
+    type: RGB565
+    resize: 600x1024
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(my_slideshow).on_image_ready(2, x);
+    on_error:
+      - lambda: |-
+          id(my_slideshow).on_image_error(2);
+
+# The slideshow component orchestrates the image slots
+slideshow:
+  id: my_slideshow
+  backend_url: "https://your-backend.run.app/api/devices/living-room"
+  device_id: "living-room"
+  advance_interval: 10s
+  queue_refresh_interval: 60s
+  auto_advance: true
+  
+  image_slots:
+    - slide_slot_0
+    - slide_slot_1
+    - slide_slot_2
+  
+  on_advance:
+    - lambda: |-
+        ESP_LOGI("slideshow", "Advanced to image %d", x);
+        // Update display here if needed
+  
+  on_image_ready:
+    - lambda: |-
+        size_t index = index;
+        bool cached = cached;
+        ESP_LOGI("slideshow", "Image %d ready (cached: %s)", 
+                 index, cached ? "yes" : "no");
+  
+  on_queue_updated:
+    - lambda: |-
+        ESP_LOGI("slideshow", "Queue updated: %d images", x);
+  
+  on_error:
+    - lambda: |-
+          ESP_LOGE("slideshow", "Error: %s", x.c_str());
+
+# Control buttons (optional)
+binary_sensor:
+  - platform: gpio
+    pin: GPIO0
+    name: "Next Button"
+    on_press:
+      - slideshow.advance: my_slideshow
+  
+  - platform: gpio
+    pin: GPIO1
+    name: "Previous Button"
+    on_press:
+      - slideshow.previous: my_slideshow
+  
+  - platform: gpio
+    pin: GPIO2
+    name: "Pause/Resume Button"
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(my_slideshow).is_paused();'
+          then:
+            - slideshow.resume: my_slideshow
+          else:
+            - slideshow.pause: my_slideshow
+
+# LVGL Display integration (example)
+lvgl:
+  displays:
+    - my_display
+  
+  on_idle:
+    timeout: never
+  
+  pages:
+    - id: slideshow_page
+      widgets:
+        - obj:
+            width: 600
+            height: 1024
+            align: CENTER
+            widgets:
+              - img:
+                  id: slideshow_image
+                  align: CENTER
+                  # Image source is updated in loop
+
+# Display component
+display:
+  - platform: st7789v  # Or your display type
+    id: my_display
+    # ... display configuration ...
+    lambda: |-
+      // Get current image from slideshow
+      auto *current = id(my_slideshow).get_current_image();
+      
+      if (current != nullptr && current->get_width() > 0) {
+        // Image is ready - draw it
+        it.image(0, 0, current);
+      } else {
+        // Still loading - show placeholder
+        it.image(0, 0, id(loading_placeholder));
+      }
+
+# For LVGL, update image source in loop
+interval:
+  - interval: 100ms
+    then:
+      - lambda: |-
+          auto *current = id(my_slideshow).get_current_image();
+          if (current != nullptr && current->get_width() > 0) {
+            lv_img_set_src(id(slideshow_image), current->get_lv_img_dsc());
+          }
+
+# Auto-refresh queue on WiFi connect
+wifi:
+  on_connect:
+    - delay: 2s  # Wait for network to stabilize
+    - slideshow.refresh_queue: my_slideshow
+
+# API for debugging
+api:
+  services:
+    - service: slideshow_advance
+      then:
+        - slideshow.advance: my_slideshow
+    
+    - service: slideshow_previous
+      then:
+        - slideshow.previous: my_slideshow
+    
+    - service: slideshow_pause
+      then:
+        - slideshow.pause: my_slideshow
+    
+    - service: slideshow_resume
+      then:
+        - slideshow.resume: my_slideshow
+    
+    - service: slideshow_refresh_queue
+      then:
+        - slideshow.refresh_queue: my_slideshow
+
+logger:
+  level: DEBUG
+  logs:
+    slideshow: DEBUG
+    online_image: DEBUG
