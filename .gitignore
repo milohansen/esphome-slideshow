@@ -3,3 +3,5 @@
 secrets.yaml
 build/
 .esphome/
+*.pyc
+__pycache__
