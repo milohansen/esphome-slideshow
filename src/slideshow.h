@@ -29,7 +29,7 @@ class SlideshowComponent : public Component {
   void set_device_id(const std::string &id) { device_id_ = id; }
   void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
   void set_queue_refresh_interval(uint32_t ms) { queue_refresh_interval_ = ms; }
-  void set_auto_advance(bool enable) { auto_advance_ = enable; }
+  // void set_auto_advance(bool enable) { auto_advance_ = enable; }
   void add_image_slot(online_image::OnlineImage *slot);
   void set_http_request(http_request::HttpRequestComponent *http) { http_request_ = http; }
 
@@ -84,7 +84,7 @@ class SlideshowComponent : public Component {
   std::string device_id_;
   uint32_t advance_interval_{10000};
   uint32_t queue_refresh_interval_{60000};
-  bool auto_advance_{true};
+  // bool auto_advance_{true};
   bool paused_{false};
 
   // Queue data

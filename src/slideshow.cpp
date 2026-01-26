@@ -33,13 +33,13 @@ void SlideshowComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  Device ID: %s", device_id_.c_str());
   ESP_LOGCONFIG(TAG, "  Advance interval: %ums", advance_interval_);
   ESP_LOGCONFIG(TAG, "  Queue refresh interval: %ums", queue_refresh_interval_);
-  ESP_LOGCONFIG(TAG, "  Auto advance: %s", auto_advance_ ? "YES" : "NO");
+  // ESP_LOGCONFIG(TAG, "  Auto advance: %s", auto_advance_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Image slots: %d", image_slots_.size());
 }
 
 void SlideshowComponent::loop() {
   // Auto-advance timer
-  if (auto_advance_ && !paused_ && queue_.size() > 0) {
+  if (advance_interval_ > 0 && !paused_ && queue_.size() > 0) {
     uint32_t now = millis();
     if (now - last_advance_ >= advance_interval_) {
       advance();

@@ -42,9 +42,9 @@ CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(SlideshowComponent),
     cv.Required(CONF_BACKEND_URL): cv.url,
     cv.Required(CONF_DEVICE_ID): cv.string,
-    cv.Optional(CONF_ADVANCE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds,
-    cv.Optional(CONF_QUEUE_REFRESH_INTERVAL, default="60s"): cv.positive_time_period_milliseconds,
-    cv.Optional(CONF_AUTO_ADVANCE, default=True): cv.boolean,
+    cv.Optional(CONF_ADVANCE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds, # type: ignore
+    cv.Optional(CONF_QUEUE_REFRESH_INTERVAL, default="60s"): cv.positive_time_period_milliseconds, # type: ignore
+    # cv.Optional(CONF_AUTO_ADVANCE, default=True): cv.boolean, # type: ignore
     cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(cv.use_id(online_image.OnlineImage)),
     cv.Optional(CONF_ON_ADVANCE): automation.validate_automation({
         cv.GenerateID(automation.CONF_TRIGGER_ID): cv.declare_id(OnAdvanceTrigger),
