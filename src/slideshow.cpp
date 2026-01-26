@@ -471,7 +471,7 @@ namespace esphome
         return;
       }
 
-      auto *img = image_slots_[slot_index];
+      auto *slot = image_slots_[slot_index];
       const QueueItem &item = queue_[queue_index];
 
       ESP_LOGI(TAG, "Loading image %s into slot %d (queue index %d)",
@@ -482,8 +482,9 @@ namespace esphome
       loading_slots_.insert(slot_index);
 
       // Set URL and trigger download
-      img->set_url(item.url);
-      img->update();
+      // slot->set_url(item.url);
+      slot->set_source(queue_[queue_index].url);
+      slot->update();
     }
 
     bool SlideshowComponent::is_slot_loading_(size_t slot_index)
