@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include "slideshow_online_image.h"
 
 namespace esphome
 {
@@ -72,7 +73,8 @@ namespace esphome
       size_t current_index() const { return current_index_; }
       bool is_paused() const { return paused_; }
       size_t queue_size() const { return queue_.size(); }
-      online_image::OnlineImage *get_current_image();
+      // online_image::OnlineImage *get_current_image();
+      display::Image* get_current_image();
       online_image::OnlineImage *get_slot(size_t slot_index);
 
       // Called by online_image callbacks
@@ -123,7 +125,8 @@ namespace esphome
       size_t current_index_{0};
 
       // Image slots
-      std::vector<online_image::OnlineImage *> image_slots_;
+      // std::vector<online_image::OnlineImage *> image_slots_;
+      std::vector<SlideshowSlot*> image_slots_;
 
       // Mapping: queue_index -> slot_index
       std::map<size_t, size_t> loaded_images_;
