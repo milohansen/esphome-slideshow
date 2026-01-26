@@ -1,3 +1,6 @@
+#pragma once
+
+#include "slideshow.h"
 
 #ifdef USE_LOCAL_IMAGE
 
@@ -23,6 +26,11 @@ namespace esphome
         this->img_->load(); // Assuming it has a load/update method
       }
 
+      void release() override
+      {
+        this->img_->release();
+      }
+
       esphome::image::Image *get_image() override
       {
         return this->img_;
@@ -31,6 +39,11 @@ namespace esphome
       bool is_ready() override
       {
         return this->img_->get_width() > 0;
+      }
+
+      bool is_failed() override
+      {
+        return this->img_->get_width() == 0;
       }
 
     protected:

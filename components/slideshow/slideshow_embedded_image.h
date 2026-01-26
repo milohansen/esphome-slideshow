@@ -1,5 +1,8 @@
+#pragma once
 
 #include "esphome/core/component.h"
+
+#include "slideshow.h"
 
 namespace esphome
 {
@@ -21,6 +24,11 @@ namespace esphome
         // this->img_->load(); // Assuming it has a load/update method
         ESP_LOGI("slideshow", "EmbeddedImageSlot does not support update. Image is assumed to be always ready.");
       }
+      
+      void release() override
+      {
+        ESP_LOGI("slideshow", "EmbeddedImageSlot does not support release. Image cannot be released.");
+      }
 
       esphome::image::Image *get_image() override
       {
@@ -29,7 +37,12 @@ namespace esphome
 
       bool is_ready() override
       {
-        return this->img_->get_width() > 0;
+        return true;
+      }
+
+      bool is_failed() override
+      {
+        return false;
       }
 
     protected:

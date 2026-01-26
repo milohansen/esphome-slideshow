@@ -1,7 +1,14 @@
-// slideshow.cpp
-#include "slideshow.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
+
+#include "slideshow.h"
+
+#include "slideshow_online_image.h"
+#include "slideshow_embedded_image.h"
+#ifdef USE_LOCAL_IMAGE
+#include "esphome/components/local_image/local_image.h"
+#include "slideshow_local_image.h"
+#endif
 
 namespace esphome
 {
@@ -70,27 +77,27 @@ namespace esphome
       ensure_slots_loaded_();
     }
 
-      void SlideshowComponent::add_image_slot(online_image::OnlineImage *slot)
-      {
-        // Create the adapter and store it
-        auto *adapter = new OnlineImageSlot(slot);
-        this->image_slots_.push_back(adapter);
-      }
-      void SlideshowComponent::add_image_slot(esphome::image::Image *slot)
-      {
-        // Create the adapter and store it
-        auto *adapter = new EmbeddedImageSlot(slot);
-        this->image_slots_.push_back(adapter);
-      }
+    void SlideshowComponent::add_image_slot(online_image::OnlineImage *slot)
+    {
+      // Create the adapter and store it
+      auto *adapter = new OnlineImageSlot(slot);
+      this->image_slots_.push_back(adapter);
+    }
+    void SlideshowComponent::add_image_slot(esphome::image::Image *slot)
+    {
+      // Create the adapter and store it
+      auto *adapter = new EmbeddedImageSlot(slot);
+      this->image_slots_.push_back(adapter);
+    }
 
 // Guarded implementation for LocalImage
 #ifdef USE_LOCAL_IMAGE
-      void SlideshowComponent::add_image_slot(local_image::LocalImage *slot)
-      {
-        // Create the adapter and store it
-        auto *adapter = new LocalImageSlot(slot);
-        this->image_slots_.push_back(adapter);
-      }
+    void SlideshowComponent::add_image_slot(local_image::LocalImage *slot)
+    {
+      // Create the adapter and store it
+      auto *adapter = new LocalImageSlot(slot);
+      this->image_slots_.push_back(adapter);
+    }
 #endif
 
     void SlideshowComponent::advance()
@@ -274,18 +281,33 @@ namespace esphome
       }
 
       std::string url = backend_url_ + "/slideshow";
-
       ESP_LOGD(TAG, "Fetching queue from: %s", url.c_str());
 
-      http_request_->get(url, [this](int status_code, const std::string &body)
-                         {
-    if (status_code == 200) {
-      ESP_LOGD(TAG, "Queue response: %s", body.c_str());
-      parse_queue_response_(body);
-    } else {
-      ESP_LOGE(TAG, "Queue fetch failed with status %d", status_code);
-      on_error_callbacks_.call("Queue fetch failed");
-    } });
+      // http_request->get is synchronous in this context.
+      // It returns the container with the response data.
+      auto response = http_request_->get(url);
+
+      if (response != nullptr)
+      {
+        // Check HTTP status code (200 OK)
+        if (response->status_code == 200)
+        {
+          // Get the body as a string
+          std::string body = response->get_string();
+          ESP_LOGD(TAG, "Queue response: %s", body.c_str());
+          parse_queue_response_(body);
+        }
+        else
+        {
+          ESP_LOGE(TAG, "Queue fetch failed with status %d", response->status_code);
+          on_error_callbacks_.call("Queue fetch failed: HTTP " + to_string(response->status_code));
+        }
+      }
+      else
+      {
+        ESP_LOGE(TAG, "Queue fetch failed: Connection error");
+        on_error_callbacks_.call("Queue fetch failed: Connection error");
+      }
 
       last_queue_refresh_ = millis();
     }

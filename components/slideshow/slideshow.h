@@ -4,15 +4,13 @@
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
 #include "esphome/components/http_request/http_request.h"
+#include "esphome/components/image/image.h"
+#include "esphome/components/online_image/online_image.h"
+
 #include <vector>
 #include <map>
 #include <set>
-// #include "slideshow_online_image.h"
 
-// #ifdef USE_LOCAL_IMAGE
-// #include "esphome/components/local_image/local_image.h"
-// #include "slideshow_local_image.h"
-// #endif
 
 namespace esphome
 {

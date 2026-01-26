@@ -1,6 +1,9 @@
+#pragma once
 
 #include "esphome/core/component.h"
 #include "esphome/components/online_image/online_image.h"
+
+#include "slideshow.h"
 
 namespace esphome
 {
