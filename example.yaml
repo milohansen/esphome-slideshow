@@ -3,12 +3,34 @@
 
 esphome:
   name: living-room-display
-  platform: ESP32
-  board: esp32-s3-devkitc-1
+
+esp32:
+  board: esp32-p4-evboard
+  flash_size: 16Mb
+  cpu_frequency: 360MHz
+  framework:
+    type: esp-idf
+    advanced:
+      enable_idf_experimental_features: yes
+      disable_vfs_support_termios: false
+      disable_vfs_support_select: false
+      disable_vfs_support_dir: false
+    sdkconfig_options:
+      CONFIG_SPIRAM_XIP_FROM_PSRAM: "y" # Stop screen flashing during OTA
+      CONFIG_SDMMC_HOST_DEFAULT: "y"
+      CONFIG_LV_COLOR_SCREEN_TRANSP: "y" # Enable LVGL screen transparency
+
+external_components:
+  - source:
+      type: local
+      path: src
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  on_connect:
+    - delay: 2s # Wait for network to stabilize
+    - slideshow.refresh_queue: my_slideshow
 
 # Required for online_image
 http_request:
@@ -25,7 +47,7 @@ image:
 # Create 3 online_image slots for the slideshow
 # These will be dynamically loaded/unloaded as the slideshow advances
 online_image:
-  - url: ""  # URL will be set dynamically
+  - url: "" # URL will be set dynamically
     id: slide_slot_0
     type: RGB565
     resize: 600x1024
@@ -73,134 +95,31 @@ slideshow:
   advance_interval: 10s
   queue_refresh_interval: 60s
   auto_advance: true
-  
+
   image_slots:
     - slide_slot_0
     - slide_slot_1
     - slide_slot_2
-  
+
   on_advance:
     - lambda: |-
         ESP_LOGI("slideshow", "Advanced to image %d", x);
         // Update display here if needed
-  
+
   on_image_ready:
     - lambda: |-
         size_t index = index;
         bool cached = cached;
         ESP_LOGI("slideshow", "Image %d ready (cached: %s)", 
                  index, cached ? "yes" : "no");
-  
+
   on_queue_updated:
     - lambda: |-
         ESP_LOGI("slideshow", "Queue updated: %d images", x);
-  
+
   on_error:
     - lambda: |-
-          ESP_LOGE("slideshow", "Error: %s", x.c_str());
-
-# Control buttons (optional)
-binary_sensor:
-  - platform: gpio
-    pin: GPIO0
-    name: "Next Button"
-    on_press:
-      - slideshow.advance: my_slideshow
-  
-  - platform: gpio
-    pin: GPIO1
-    name: "Previous Button"
-    on_press:
-      - slideshow.previous: my_slideshow
-  
-  - platform: gpio
-    pin: GPIO2
-    name: "Pause/Resume Button"
-    on_press:
-      - if:
-          condition:
-            lambda: 'return id(my_slideshow).is_paused();'
-          then:
-            - slideshow.resume: my_slideshow
-          else:
-            - slideshow.pause: my_slideshow
-
-# LVGL Display integration (example)
-lvgl:
-  displays:
-    - my_display
-  
-  on_idle:
-    timeout: never
-  
-  pages:
-    - id: slideshow_page
-      widgets:
-        - obj:
-            width: 600
-            height: 1024
-            align: CENTER
-            widgets:
-              - img:
-                  id: slideshow_image
-                  align: CENTER
-                  # Image source is updated in loop
-
-# Display component
-display:
-  - platform: st7789v  # Or your display type
-    id: my_display
-    # ... display configuration ...
-    lambda: |-
-      // Get current image from slideshow
-      auto *current = id(my_slideshow).get_current_image();
-      
-      if (current != nullptr && current->get_width() > 0) {
-        // Image is ready - draw it
-        it.image(0, 0, current);
-      } else {
-        // Still loading - show placeholder
-        it.image(0, 0, id(loading_placeholder));
-      }
-
-# For LVGL, update image source in loop
-interval:
-  - interval: 100ms
-    then:
-      - lambda: |-
-          auto *current = id(my_slideshow).get_current_image();
-          if (current != nullptr && current->get_width() > 0) {
-            lv_img_set_src(id(slideshow_image), current->get_lv_img_dsc());
-          }
-
-# Auto-refresh queue on WiFi connect
-wifi:
-  on_connect:
-    - delay: 2s  # Wait for network to stabilize
-    - slideshow.refresh_queue: my_slideshow
-
-# API for debugging
-api:
-  services:
-    - service: slideshow_advance
-      then:
-        - slideshow.advance: my_slideshow
-    
-    - service: slideshow_previous
-      then:
-        - slideshow.previous: my_slideshow
-    
-    - service: slideshow_pause
-      then:
-        - slideshow.pause: my_slideshow
-    
-    - service: slideshow_resume
-      then:
-        - slideshow.resume: my_slideshow
-    
-    - service: slideshow_refresh_queue
-      then:
-        - slideshow.refresh_queue: my_slideshow
+        ESP_LOGE("slideshow", "Error: %s", x.c_str());
 
 logger:
   level: DEBUG
