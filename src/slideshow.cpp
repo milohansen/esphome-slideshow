@@ -70,10 +70,22 @@ namespace esphome
       ensure_slots_loaded_();
     }
 
-    void SlideshowComponent::add_image_slot(online_image::OnlineImage *slot)
-    {
-      image_slots_.push_back(slot);
-    }
+      void SlideshowComponent::add_image_slot(online_image::OnlineImage *slot)
+      {
+        // Create the adapter and store it
+        auto *adapter = new OnlineImageSlot(slot);
+        this->image_slots_.push_back(adapter);
+      }
+
+// Guarded implementation for LocalImage
+#ifdef USE_LOCAL_IMAGE
+      void SlideshowComponent::add_image_slot(local_image::LocalImage *slot)
+      {
+        // Create the adapter and store it
+        auto *adapter = new LocalImageSlot(slot);
+        this->image_slots_.push_back(adapter);
+      }
+#endif
 
     void SlideshowComponent::advance()
     {

@@ -3,12 +3,16 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
-#include "esphome/components/online_image/online_image.h"
 #include "esphome/components/http_request/http_request.h"
 #include <vector>
 #include <map>
 #include <set>
 #include "slideshow_online_image.h"
+
+#ifdef USE_LOCAL_IMAGE
+#include "esphome/components/local_image/local_image.h"
+#include "slideshow_local_image.h"
+#endif
 
 namespace esphome
 {
@@ -57,8 +61,11 @@ namespace esphome
       void set_device_id(const std::string &id) { device_id_ = id; }
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
       void set_queue_refresh_interval(uint32_t ms) { queue_refresh_interval_ = ms; }
-      // void set_auto_advance(bool enable) { auto_advance_ = enable; }
       void add_image_slot(online_image::OnlineImage *slot);
+#ifdef USE_LOCAL_IMAGE
+      void add_image_slot(local_image::LocalImage *slot);
+#endif
+
       void set_http_request(http_request::HttpRequestComponent *http) { http_request_ = http; }
 
       // Control API
@@ -74,7 +81,7 @@ namespace esphome
       bool is_paused() const { return paused_; }
       size_t queue_size() const { return queue_.size(); }
       // online_image::OnlineImage *get_current_image();
-      display::Image* get_current_image();
+      display::Image *get_current_image();
       online_image::OnlineImage *get_slot(size_t slot_index);
 
       // Called by online_image callbacks
@@ -126,7 +133,7 @@ namespace esphome
 
       // Image slots
       // std::vector<online_image::OnlineImage *> image_slots_;
-      std::vector<SlideshowSlot*> image_slots_;
+      std::vector<SlideshowSlot *> image_slots_;
 
       // Mapping: queue_index -> slot_index
       std::map<size_t, size_t> loaded_images_;

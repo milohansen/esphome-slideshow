@@ -8,6 +8,13 @@ from esphome.const import (
     CONF_URL,
 )
 
+# Check if local_image is available in the environment
+try:
+    from esphome.components import local_image # pyright: ignore[reportAttributeAccessIssue]
+    HAS_LOCAL_IMAGE = True
+except ImportError:
+    HAS_LOCAL_IMAGE = False
+
 DEPENDENCIES = ["http_request", "online_image"]
 AUTO_LOAD = ["online_image"]
 
@@ -79,7 +86,13 @@ async def to_code(config):
     # Add image slots
     for slot_id in config[CONF_IMAGE_SLOTS]:
         slot = await cg.get_variable(slot_id)
-        cg.add(var.add_image_slot(slot))
+        if HAS_LOCAL_IMAGE and isinstance(slot, local_image.LocalImage): # pyright: ignore[reportPossiblyUnboundVariable]
+             # This calls add_image_slot(local_image::LocalImage *slot)
+            cg.add(var.add_image_slot(slot))
+        else:
+             # This calls add_image_slot(online_image::OnlineImage *slot)
+            cg.add(var.add_image_slot(slot))
+
 
     # Setup triggers
     for conf in config.get(CONF_ON_ADVANCE, []):
