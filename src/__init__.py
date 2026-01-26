@@ -70,7 +70,7 @@ async def to_code(config):
     cg.add(var.set_device_id(config[CONF_DEVICE_ID]))
     cg.add(var.set_advance_interval(config[CONF_ADVANCE_INTERVAL]))
     cg.add(var.set_queue_refresh_interval(config[CONF_QUEUE_REFRESH_INTERVAL]))
-    cg.add(var.set_auto_advance(config[CONF_AUTO_ADVANCE]))
+    # cg.add(var.set_auto_advance(config[CONF_AUTO_ADVANCE]))
 
     # Get http_request component (required dependency)
     http = await cg.get_variable(http_request.CONF_HTTP_REQUEST_ID)
