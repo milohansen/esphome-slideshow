@@ -34,7 +34,7 @@ namespace esphome
         this->img_->release();
       }
 
-      display::Image *get_image() override
+      esphome::image::Image *get_image() override
       {
         return this->img_;
       }

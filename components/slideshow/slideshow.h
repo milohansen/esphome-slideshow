@@ -7,12 +7,12 @@
 #include <vector>
 #include <map>
 #include <set>
-#include "slideshow_online_image.h"
+// #include "slideshow_online_image.h"
 
-#ifdef USE_LOCAL_IMAGE
-#include "esphome/components/local_image/local_image.h"
-#include "slideshow_local_image.h"
-#endif
+// #ifdef USE_LOCAL_IMAGE
+// #include "esphome/components/local_image/local_image.h"
+// #include "slideshow_local_image.h"
+// #endif
 
 namespace esphome
 {
@@ -35,7 +35,7 @@ namespace esphome
       virtual void release() = 0;
 
       // Return the underlying generic Image for the Display component
-      virtual display::Image *get_image() = 0;
+      virtual esphome::image::Image *get_image() = 0;
 
       // Status check
       virtual bool is_ready() = 0;
@@ -62,6 +62,7 @@ namespace esphome
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
       void set_queue_refresh_interval(uint32_t ms) { queue_refresh_interval_ = ms; }
       void add_image_slot(online_image::OnlineImage *slot);
+      void add_image_slot(esphome::image::Image *slot);
 #ifdef USE_LOCAL_IMAGE
       void add_image_slot(local_image::LocalImage *slot);
 #endif
@@ -80,12 +81,11 @@ namespace esphome
       size_t current_index() const { return current_index_; }
       bool is_paused() const { return paused_; }
       size_t queue_size() const { return queue_.size(); }
-      // online_image::OnlineImage *get_current_image();
-      display::Image *get_current_image();
-      online_image::OnlineImage *get_slot(size_t slot_index);
+      SlideshowSlot *get_current_image();
+      SlideshowSlot *get_slot(size_t slot_index);
 
       // Called by online_image callbacks
-      void on_image_ready(size_t slot_index, bool from_cache);
+      void on_image_ready(size_t slot_index);
       void on_image_error(size_t slot_index);
 
       // Callbacks

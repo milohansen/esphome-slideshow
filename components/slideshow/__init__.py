@@ -47,6 +47,7 @@ RefreshQueueAction = slideshow_ns.class_("RefreshQueueAction", automation.Action
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(SlideshowComponent),
+    cv.GenerateID(http_request.CONF_HTTP_REQUEST_ID): cv.use_id(http_request.HttpRequestComponent),
     cv.Required(CONF_BACKEND_URL): cv.url,
     cv.Required(CONF_DEVICE_ID): cv.string,
     cv.Optional(CONF_ADVANCE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds, # type: ignore
@@ -80,7 +81,8 @@ async def to_code(config):
     # cg.add(var.set_auto_advance(config[CONF_AUTO_ADVANCE]))
 
     # Get http_request component (required dependency)
-    http = await cg.get_variable(http_request.CONF_HTTP_REQUEST_ID)
+    http = await cg.get_variable(config[http_request.CONF_HTTP_REQUEST_ID])
+    # http = await cg.get_variable(cv.use_id(http_request.HttpRequestComponent))
     cg.add(var.set_http_request(http))
 
     # Add image slots

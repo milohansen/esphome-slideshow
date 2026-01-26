@@ -76,6 +76,12 @@ namespace esphome
         auto *adapter = new OnlineImageSlot(slot);
         this->image_slots_.push_back(adapter);
       }
+      void SlideshowComponent::add_image_slot(esphome::image::Image *slot)
+      {
+        // Create the adapter and store it
+        auto *adapter = new EmbeddedImageSlot(slot);
+        this->image_slots_.push_back(adapter);
+      }
 
 // Guarded implementation for LocalImage
 #ifdef USE_LOCAL_IMAGE
@@ -187,7 +193,7 @@ namespace esphome
       fetch_queue_();
     }
 
-    online_image::OnlineImage *SlideshowComponent::get_current_image()
+    SlideshowSlot *SlideshowComponent::get_current_image()
     {
       auto it = loaded_images_.find(current_index_);
       if (it != loaded_images_.end())
@@ -196,7 +202,7 @@ namespace esphome
         auto *img = image_slots_[slot_idx];
 
         // Only return if image is actually loaded (width > 0)
-        if (img->get_width() > 0)
+        if (img->is_ready())
         {
           return img;
         }
@@ -204,7 +210,7 @@ namespace esphome
       return nullptr;
     }
 
-    online_image::OnlineImage *SlideshowComponent::get_slot(size_t slot_index)
+    SlideshowSlot *SlideshowComponent::get_slot(size_t slot_index)
     {
       if (slot_index < image_slots_.size())
       {
@@ -213,9 +219,9 @@ namespace esphome
       return nullptr;
     }
 
-    void SlideshowComponent::on_image_ready(size_t slot_index, bool from_cache)
+    void SlideshowComponent::on_image_ready(size_t slot_index)
     {
-      ESP_LOGD(TAG, "Image ready in slot %d (cached: %s)", slot_index, from_cache ? "yes" : "no");
+      ESP_LOGD(TAG, "Image ready in slot %d", slot_index);
 
       // Remove from loading set
       loading_slots_.erase(slot_index);
@@ -229,7 +235,7 @@ namespace esphome
                    queue_[pair.first].image_id.c_str(), pair.first);
 
           // Fire callback
-          on_image_ready_callbacks_.call(pair.first, from_cache);
+          on_image_ready_callbacks_.call(pair.first, false);
           break;
         }
       }
@@ -467,7 +473,7 @@ namespace esphome
       }
 
       auto *img = image_slots_[slot_index];
-      if (img->get_width() > 0)
+      if (img->is_ready())
       {
         ESP_LOGD(TAG, "Calling release() on slot %d", slot_index);
         img->release();

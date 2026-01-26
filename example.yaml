@@ -89,8 +89,7 @@ online_image:
     placeholder: loading_placeholder
     on_download_finished:
       - lambda: |-
-          bool cached = x;  // x is true if loaded from cache
-          id(my_slideshow).on_image_ready(0, cached);
+          id(my_slideshow).on_image_ready(0);
     on_error:
       - lambda: |-
           id(my_slideshow).on_image_error(0);
@@ -103,7 +102,7 @@ online_image:
     placeholder: loading_placeholder
     on_download_finished:
       - lambda: |-
-          id(my_slideshow).on_image_ready(1, x);
+          id(my_slideshow).on_image_ready(1);
     on_error:
       - lambda: |-
           id(my_slideshow).on_image_error(1);
@@ -116,7 +115,7 @@ online_image:
     placeholder: loading_placeholder
     on_download_finished:
       - lambda: |-
-          id(my_slideshow).on_image_ready(2, x);
+          id(my_slideshow).on_image_ready(2);
     on_error:
       - lambda: |-
           id(my_slideshow).on_image_error(2);
@@ -141,10 +140,7 @@ slideshow:
 
   on_image_ready:
     - lambda: |-
-        size_t index = index;
-        bool cached = cached;
-        ESP_LOGI("slideshow", "Image %d ready (cached: %s)", 
-                 index, cached ? "yes" : "no");
+        ESP_LOGI("slideshow", "Image %d ready", index);
 
   on_queue_updated:
     - lambda: |-
