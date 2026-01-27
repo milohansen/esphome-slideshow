@@ -35,7 +35,7 @@ namespace esphome
       //   return;
       // }
 
-      on_refresh_callbacks_.call(0); // Initial call with size 0
+      on_refresh_callbacks_.call(0);
     }
 
     void SlideshowComponent::dump_config()
@@ -67,7 +67,7 @@ namespace esphome
         {
           ESP_LOGD(TAG, "Triggering refresh...");
           // Fire the trigger! Pass current queue size as argument
-          on_refresh_callbacks_.call(queue_.size());
+          on_refresh_callbacks_.call(0);
           last_refresh_ = now;
         }
       }
@@ -163,6 +163,11 @@ namespace esphome
         last_advance_ = millis(); // Reset timer
         ESP_LOGI(TAG, "Resumed from index %d", current_index_);
       }
+    }
+
+    void SlideshowComponent::refresh()
+    {
+      on_refresh_callbacks_.call(0);
     }
 
     void SlideshowComponent::jump_to(size_t index)

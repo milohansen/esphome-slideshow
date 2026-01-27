@@ -250,6 +250,17 @@ namespace esphome
     };
 
     template <typename... Ts>
+    class RefreshAction : public Action<Ts...>
+    {
+    public:
+      explicit RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
+      void play(Ts... x) override { slideshow_->refresh(); }
+
+    protected:
+      SlideshowComponent *slideshow_;
+    };
+
+    template <typename... Ts>
     class EnqueueAction : public Action<Ts...>
     {
     public:
