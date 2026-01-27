@@ -293,30 +293,38 @@ namespace esphome
           // 2. Read the response body from the stream
           std::string body;
           // Reserve memory if content_length is known to avoid reallocations
-          if (response->content_length > 0) {
+          if (response->content_length > 0)
+          {
             body.reserve(response->content_length);
           }
 
           // Buffer for reading chunks
-          uint8_t buffer[1024]; 
+          uint8_t buffer[1024];
           uint32_t start_time = millis();
-          
-          while (millis() - start_time < 5000) { // 5-second read timeout
+
+          while (millis() - start_time < 5000)
+          { // 5-second read timeout
             int bytes_read = response->read(buffer, sizeof(buffer));
-            
-            if (bytes_read > 0) {
+
+            if (bytes_read > 0)
+            {
               // Append data
-              body.append((char*)buffer, bytes_read);
+              body.append((char *)buffer, bytes_read);
               start_time = millis(); // Reset timeout on activity
-              
-              // Stop if we have read all expected content
-              if (response->content_length > 0 && body.length() >= response->content_length) {
-                break;
-              }
-            } else if (bytes_read < 0) {
+            }
+            else if (bytes_read < 0)
+            {
               // Error or Connection Closed (EOF)
               break;
-            } else {
+            }
+            else
+            {
+
+              // Stop if we have read all expected content
+              if (response->content_length > 0 && body.length() >= response->content_length)
+              {
+                break;
+              }
               // bytes_read == 0: No data available yet, wait a bit
               delay(10);
               App.feed_wdt();
