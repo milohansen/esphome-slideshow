@@ -253,7 +253,7 @@ namespace esphome
     class RefreshAction : public Action<Ts...>
     {
     public:
-      explicit RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
+      RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
       void play(Ts... x) override { this->slideshow_->refresh(); }
 
     protected:
