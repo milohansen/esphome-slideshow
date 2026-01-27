@@ -210,7 +210,7 @@ namespace esphome
     {
     public:
       explicit AdvanceAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { slideshow_->advance(); }
+      void play(Ts... x) override { this->slideshow_->advance(); }
 
     protected:
       SlideshowComponent *slideshow_;
@@ -221,7 +221,7 @@ namespace esphome
     {
     public:
       explicit PreviousAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { slideshow_->previous(); }
+      void play(Ts... x) override { this->slideshow_->previous(); }
 
     protected:
       SlideshowComponent *slideshow_;
@@ -232,7 +232,7 @@ namespace esphome
     {
     public:
       explicit PauseAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { slideshow_->pause(); }
+      void play(Ts... x) override { this->slideshow_->pause(); }
 
     protected:
       SlideshowComponent *slideshow_;
@@ -243,7 +243,7 @@ namespace esphome
     {
     public:
       explicit ResumeAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { slideshow_->resume(); }
+      void play(Ts... x) override { this->slideshow_->resume(); }
 
     protected:
       SlideshowComponent *slideshow_;
@@ -254,7 +254,7 @@ namespace esphome
     {
     public:
       explicit RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { slideshow_->refresh(); }
+      void play(Ts... x) override { this->slideshow_->refresh(); }
 
     protected:
       SlideshowComponent *slideshow_;
