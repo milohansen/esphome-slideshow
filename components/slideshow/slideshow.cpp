@@ -283,17 +283,46 @@ namespace esphome
       std::string url = backend_url_ + "/slideshow";
       ESP_LOGD(TAG, "Fetching queue from: %s", url.c_str());
 
-      // http_request->get is synchronous in this context.
-      // It returns the container with the response data.
+      // 1. Initiate the request
       auto response = http_request_->get(url);
 
       if (response != nullptr)
       {
-        // Check HTTP status code (200 OK)
         if (response->status_code == 200)
         {
-          // Get the body as a string
-          std::string body = response->get_string();
+          // 2. Read the response body from the stream
+          std::string body;
+          // Reserve memory if content_length is known to avoid reallocations
+          if (response->content_length > 0) {
+            body.reserve(response->content_length);
+          }
+
+          // Buffer for reading chunks
+          uint8_t buffer[1024]; 
+          uint32_t start_time = millis();
+          
+          while (millis() - start_time < 5000) { // 5-second read timeout
+            int bytes_read = response->read(buffer, sizeof(buffer));
+            
+            if (bytes_read > 0) {
+              // Append data
+              body.append((char*)buffer, bytes_read);
+              start_time = millis(); // Reset timeout on activity
+              
+              // Stop if we have read all expected content
+              if (response->content_length > 0 && body.length() >= response->content_length) {
+                break;
+              }
+            } else if (bytes_read < 0) {
+              // Error or Connection Closed (EOF)
+              break;
+            } else {
+              // bytes_read == 0: No data available yet, wait a bit
+              delay(10);
+              App.feed_wdt();
+            }
+          }
+
           ESP_LOGD(TAG, "Queue response: %s", body.c_str());
           parse_queue_response_(body);
         }
