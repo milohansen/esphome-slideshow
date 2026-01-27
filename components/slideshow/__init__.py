@@ -15,13 +15,12 @@ try:
 except ImportError:
     HAS_LOCAL_IMAGE = False
 
-DEPENDENCIES = ["http_request", "online_image"]
+DEPENDENCIES = ["online_image"]
 AUTO_LOAD = ["online_image"]
 
-CONF_BACKEND_URL = "backend_url"
-CONF_DEVICE_ID = "device_id"
+CONF_SOURCE = "source"
 CONF_ADVANCE_INTERVAL = "advance_interval"
-CONF_QUEUE_REFRESH_INTERVAL = "queue_refresh_interval"
+CONF_REFRESH_INTERVAL = "refresh_interval"
 CONF_AUTO_ADVANCE = "auto_advance"
 CONF_IMAGE_SLOTS = "image_slots"
 CONF_ON_ADVANCE = "on_advance"
@@ -47,13 +46,14 @@ RefreshQueueAction = slideshow_ns.class_("RefreshQueueAction", automation.Action
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(SlideshowComponent),
-    cv.GenerateID(http_request.CONF_HTTP_REQUEST_ID): cv.use_id(http_request.HttpRequestComponent),
-    cv.Required(CONF_BACKEND_URL): cv.url,
-    cv.Required(CONF_DEVICE_ID): cv.string,
-    cv.Optional(CONF_ADVANCE_INTERVAL, default="10s"): cv.positive_time_period_milliseconds, # type: ignore
-    cv.Optional(CONF_QUEUE_REFRESH_INTERVAL, default="60s"): cv.positive_time_period_milliseconds, # type: ignore
-    # cv.Optional(CONF_AUTO_ADVANCE, default=True): cv.boolean, # type: ignore
+
+    cv.Optional(CONF_SOURCE): cv.returning_lambda,
+
+    cv.Optional(CONF_ADVANCE_INTERVAL): cv.positive_time_period_milliseconds,
+    cv.Optional(CONF_REFRESH_INTERVAL): cv.positive_time_period_milliseconds,
+
     cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(cv.use_id(online_image.OnlineImage)),
+    
     cv.Optional(CONF_ON_ADVANCE): automation.validate_automation({
         cv.GenerateID(automation.CONF_TRIGGER_ID): cv.declare_id(OnAdvanceTrigger),
     }),
@@ -74,16 +74,15 @@ async def to_code(config):
     await cg.register_component(var, config)
 
     # Configuration
-    cg.add(var.set_backend_url(config[CONF_BACKEND_URL]))
-    cg.add(var.set_device_id(config[CONF_DEVICE_ID]))
     cg.add(var.set_advance_interval(config[CONF_ADVANCE_INTERVAL]))
-    cg.add(var.set_queue_refresh_interval(config[CONF_QUEUE_REFRESH_INTERVAL]))
-    # cg.add(var.set_auto_advance(config[CONF_AUTO_ADVANCE]))
+    cg.add(var.set_queue_refresh_interval(config[CONF_REFRESH_INTERVAL]))
 
-    # Get http_request component (required dependency)
-    http = await cg.get_variable(config[http_request.CONF_HTTP_REQUEST_ID])
-    # http = await cg.get_variable(cv.use_id(http_request.HttpRequestComponent))
-    cg.add(var.set_http_request(http))
+    # Handle the source lambda
+    if CONF_SOURCE in config:
+        template_ = await cg.process_lambda(
+            config[CONF_SOURCE], [], return_type=cg.std_vector.template(cg.std_string)
+        )
+        cg.add(var.set_queue_builder(template_)) # pyright: ignore[reportArgumentType]
 
     # Add image slots
     for slot_id in config[CONF_IMAGE_SLOTS]:

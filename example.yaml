@@ -123,10 +123,18 @@ online_image:
 # The slideshow component orchestrates the image slots
 slideshow:
   id: my_slideshow
-  backend_url: "https://your-backend.run.app/api/devices/living-room"
-  device_id: "living-room"
+  
+  source: !lambda |-
+    // Simple static queue builder
+    std::vector<std::string> queue;
+    queue.push_back("${url}");
+    queue.push_back("${url}");
+    queue.push_back("${url}");
+    queue.push_back("${url}");
+    return queue;
+
   advance_interval: 10s
-  queue_refresh_interval: 60s
+  refresh_interval: 60s
 
   image_slots:
     - slide_slot_0

@@ -42,9 +42,10 @@ namespace esphome
 
     struct QueueItem
     {
-      std::string image_id;
-      std::string url;
+      std::string source;
     };
+
+    using queue_builder_t = std::function<std::vector<std::string>()>;
 
     class SlideshowComponent : public Component
     {
@@ -55,17 +56,16 @@ namespace esphome
       float get_setup_priority() const override { return setup_priority::LATE; }
 
       // Configuration
-      void set_backend_url(const std::string &url) { backend_url_ = url; }
-      void set_device_id(const std::string &id) { device_id_ = id; }
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
       void set_queue_refresh_interval(uint32_t ms) { queue_refresh_interval_ = ms; }
+
+      void set_queue_builder(queue_builder_t &&builder) { queue_builder_ = builder; }
+
       void add_image_slot(online_image::OnlineImage *slot);
       void add_image_slot(esphome::image::Image *slot);
 #ifdef USE_LOCAL_IMAGE
       void add_image_slot(local_image::LocalImage *slot);
 #endif
-
-      void set_http_request(http_request::HttpRequestComponent *http) { http_request_ = http; }
 
       // Control API
       void advance();
@@ -73,7 +73,7 @@ namespace esphome
       void pause();
       void resume();
       void jump_to(size_t index);
-      void refresh_queue();
+      void refresh();
 
       // State queries
       size_t current_index() const { return current_index_; }
@@ -106,9 +106,7 @@ namespace esphome
 
     protected:
       // Queue management
-      void fetch_queue_();
-      void parse_queue_response_(const std::string &json);
-      std::string build_image_url_(const std::string &image_id);
+      void update_queue_from_builder_();
 
       // Slot management
       void ensure_slots_loaded_();
@@ -118,12 +116,12 @@ namespace esphome
       bool is_slot_loading_(size_t slot_index);
 
       // State
-      std::string backend_url_;
-      std::string device_id_;
       uint32_t advance_interval_{10000};
-      uint32_t queue_refresh_interval_{60000};
-      // bool auto_advance_{true};
+      uint32_t refresh_interval_{60000};
       bool paused_{false};
+
+      // The Builder Lambda
+      queue_builder_t queue_builder_;
 
       // Queue data
       std::vector<QueueItem> queue_;
@@ -135,16 +133,11 @@ namespace esphome
 
       // Mapping: queue_index -> slot_index
       std::map<size_t, size_t> loaded_images_;
-
-      // Track which slots are currently downloading
       std::set<size_t> loading_slots_;
 
       // Timing
       uint32_t last_advance_{0};
-      uint32_t last_queue_refresh_{0};
-
-      // Dependencies
-      http_request::HttpRequestComponent *http_request_{nullptr};
+      uint32_t last_refresh_{0};
 
       // Callbacks
       CallbackManager<void(size_t)> on_advance_callbacks_;
@@ -240,11 +233,11 @@ namespace esphome
     };
 
     template <typename... Ts>
-    class RefreshQueueAction : public Action<Ts...>
+    class RefreshAction : public Action<Ts...>
     {
     public:
-      explicit RefreshQueueAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { slideshow_->refresh_queue(); }
+      explicit RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
+      void play(Ts... x) override { slideshow_->refresh(); }
 
     protected:
       SlideshowComponent *slideshow_;

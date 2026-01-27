@@ -42,11 +42,8 @@ namespace esphome
     void SlideshowComponent::dump_config()
     {
       ESP_LOGCONFIG(TAG, "Slideshow:");
-      ESP_LOGCONFIG(TAG, "  Backend URL: %s", backend_url_.c_str());
-      ESP_LOGCONFIG(TAG, "  Device ID: %s", device_id_.c_str());
       ESP_LOGCONFIG(TAG, "  Advance interval: %ums", advance_interval_);
       ESP_LOGCONFIG(TAG, "  Queue refresh interval: %ums", queue_refresh_interval_);
-      // ESP_LOGCONFIG(TAG, "  Auto advance: %s", auto_advance_ ? "YES" : "NO");
       ESP_LOGCONFIG(TAG, "  Image slots: %d", image_slots_.size());
     }
 
@@ -69,7 +66,7 @@ namespace esphome
         uint32_t now = millis();
         if (now - last_queue_refresh_ >= queue_refresh_interval_)
         {
-          refresh_queue();
+          refresh();
         }
       }
 
@@ -79,24 +76,18 @@ namespace esphome
 
     void SlideshowComponent::add_image_slot(online_image::OnlineImage *slot)
     {
-      // Create the adapter and store it
-      auto *adapter = new OnlineImageSlot(slot);
-      this->image_slots_.push_back(adapter);
+      this->image_slots_.push_back(new OnlineImageSlot(slot));
     }
     void SlideshowComponent::add_image_slot(esphome::image::Image *slot)
     {
-      // Create the adapter and store it
-      auto *adapter = new EmbeddedImageSlot(slot);
-      this->image_slots_.push_back(adapter);
+      this->image_slots_.push_back(new EmbeddedImageSlot(slot));
     }
 
 // Guarded implementation for LocalImage
 #ifdef USE_LOCAL_IMAGE
     void SlideshowComponent::add_image_slot(local_image::LocalImage *slot)
     {
-      // Create the adapter and store it
-      auto *adapter = new LocalImageSlot(slot);
-      this->image_slots_.push_back(adapter);
+      this->image_slots_.push_back(new LocalImageSlot(slot));
     }
 #endif
 
@@ -194,10 +185,11 @@ namespace esphome
       on_advance_callbacks_.call(current_index_);
     }
 
-    void SlideshowComponent::refresh_queue()
+    void SlideshowComponent::refresh()
     {
-      ESP_LOGD(TAG, "Refreshing queue from backend...");
-      fetch_queue_();
+      ESP_LOGD(TAG, "Refreshing queue...");
+      update_queue_from_builder_();
+      last_refresh_ = millis();
     }
 
     SlideshowSlot *SlideshowComponent::get_current_image()
@@ -272,159 +264,43 @@ namespace esphome
 
     // Protected methods
 
-    void SlideshowComponent::fetch_queue_()
+    void SlideshowComponent::update_queue_from_builder_()
     {
-      if (!http_request_)
+      if (!queue_builder_)
       {
-        ESP_LOGE(TAG, "HTTP request component not configured!");
+        // If no builder is defined, user might have provided no source.
+        // We can't do anything.
         return;
       }
 
-      std::string url = backend_url_ + "/slideshow";
-      ESP_LOGD(TAG, "Fetching queue from: %s", url.c_str());
+      // Execute the user's lambda
+      std::vector<std::string> sources = queue_builder_();
 
-      // 1. Initiate the request
-      auto response = http_request_->get(url);
-
-      if (response != nullptr)
+      if (sources.empty())
       {
-        if (response->status_code == 200)
-        {
-          // 2. Read the response body from the stream
-          std::string body;
-          // Reserve memory if content_length is known to avoid reallocations
-          if (response->content_length > 0)
-          {
-            body.reserve(response->content_length);
-          }
-
-          // Buffer for reading chunks
-          uint8_t buffer[1024];
-          uint32_t start_time = millis();
-
-          while (millis() - start_time < 5000)
-          { // 5-second read timeout
-            int bytes_read = response->read(buffer, sizeof(buffer));
-
-            if (bytes_read > 0)
-            {
-              // Append data
-              body.append((char *)buffer, bytes_read);
-              start_time = millis(); // Reset timeout on activity
-            }
-            else if (bytes_read < 0)
-            {
-              // Error or Connection Closed (EOF)
-              break;
-            }
-            else
-            {
-
-              // Stop if we have read all expected content
-              if (response->content_length > 0 && body.length() >= response->content_length)
-              {
-                break;
-              }
-              // bytes_read == 0: No data available yet, wait a bit
-              delay(10);
-              App.feed_wdt();
-            }
-          }
-
-          ESP_LOGD(TAG, "Queue response: %s", body.c_str());
-          parse_queue_response_(body);
-        }
-        else
-        {
-          ESP_LOGE(TAG, "Queue fetch failed with status %d", response->status_code);
-          on_error_callbacks_.call("Queue fetch failed: HTTP " + to_string(response->status_code));
-        }
+        ESP_LOGW(TAG, "Source lambda returned empty list");
+        return;
       }
-      else
-      {
-        ESP_LOGE(TAG, "Queue fetch failed: Connection error");
-        on_error_callbacks_.call("Queue fetch failed: Connection error");
-      }
-
-      last_queue_refresh_ = millis();
-    }
-
-    void SlideshowComponent::parse_queue_response_(const std::string &json)
-    {
-      // Simple JSON parsing for {"queue": ["id1", "id2", ...]}
-      // For production, consider using ArduinoJson library
 
       std::vector<QueueItem> new_queue;
-
-      // Find "queue" array
-      size_t queue_pos = json.find("\"queue\"");
-      if (queue_pos == std::string::npos)
+      for (const auto &src : sources)
       {
-        ESP_LOGE(TAG, "Invalid queue response: missing 'queue' field");
-        return;
-      }
-
-      size_t array_start = json.find('[', queue_pos);
-      size_t array_end = json.find(']', array_start);
-
-      if (array_start == std::string::npos || array_end == std::string::npos)
-      {
-        ESP_LOGE(TAG, "Invalid queue response: malformed array");
-        return;
-      }
-
-      // Extract array content
-      std::string array_content = json.substr(array_start + 1, array_end - array_start - 1);
-
-      // Parse image IDs (simple approach - split by comma and clean quotes)
-      size_t pos = 0;
-      while (pos < array_content.length())
-      {
-        size_t quote1 = array_content.find('"', pos);
-        if (quote1 == std::string::npos)
-          break;
-
-        size_t quote2 = array_content.find('"', quote1 + 1);
-        if (quote2 == std::string::npos)
-          break;
-
-        std::string image_id = array_content.substr(quote1 + 1, quote2 - quote1 - 1);
-
         QueueItem item;
-        item.image_id = image_id;
-        item.url = build_image_url_(image_id);
+        item.source = src;
         new_queue.push_back(item);
-
-        pos = quote2 + 1;
       }
 
-      if (new_queue.empty())
-      {
-        ESP_LOGW(TAG, "Parsed queue is empty");
-        return;
-      }
+      ESP_LOGI(TAG, "Queue updated: %d items", new_queue.size());
 
-      ESP_LOGI(TAG, "Queue updated: %d images", new_queue.size());
-
-      // Update queue
       queue_ = new_queue;
 
-      // Ensure current index is valid
       if (current_index_ >= queue_.size())
       {
         current_index_ = 0;
       }
 
-      // Fire callback
       on_queue_updated_callbacks_.call(queue_.size());
-
-      // Reload slots with new queue
       ensure_slots_loaded_();
-    }
-
-    std::string SlideshowComponent::build_image_url_(const std::string &image_id)
-    {
-      return backend_url_ + "/images/" + device_id_ + "/" + image_id;
     }
 
     void SlideshowComponent::ensure_slots_loaded_()
@@ -544,23 +420,17 @@ namespace esphome
     void SlideshowComponent::load_image_to_slot_(size_t queue_index, size_t slot_index)
     {
       if (queue_index >= queue_.size() || slot_index >= image_slots_.size())
-      {
         return;
-      }
 
       auto *slot = image_slots_[slot_index];
       const QueueItem &item = queue_[queue_index];
 
-      ESP_LOGI(TAG, "Loading image %s into slot %d (queue index %d)",
-               item.image_id.c_str(), slot_index, queue_index);
+      ESP_LOGI(TAG, "Loading source '%s' into slot %d", item.source.c_str(), slot_index);
 
-      // Update mapping
       loaded_images_[queue_index] = slot_index;
       loading_slots_.insert(slot_index);
 
-      // Set URL and trigger download
-      // slot->set_url(item.url);
-      slot->set_source(queue_[queue_index].url);
+      slot->set_source(item.source);
       slot->update();
     }
 
