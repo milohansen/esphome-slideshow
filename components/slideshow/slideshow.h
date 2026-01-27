@@ -243,7 +243,7 @@ namespace esphome
     {
     public:
       explicit ResumeAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { this->slideshow_->resume(); }
+      void play(const Ts... x) override { this->slideshow_->resume(); }
 
     protected:
       SlideshowComponent *slideshow_;
@@ -253,8 +253,8 @@ namespace esphome
     class RefreshAction : public Action<Ts...>
     {
     public:
-      RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { this->slideshow_->refresh(); }
+      explicit RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
+      void play(const Ts... x) override { this->slideshow_->refresh(); }
 
     protected:
       SlideshowComponent *slideshow_;
@@ -265,7 +265,7 @@ namespace esphome
     {
     public:
       explicit EnqueueAction(SlideshowComponent *parent) : parent_(parent) {}
-      void play(Ts... x) override
+      void play(const Ts... x) override
       {
         // This allows the action to take a std::vector<std::string>
         this->parent_->enqueue(this->items_);
