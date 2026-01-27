@@ -44,6 +44,7 @@ AdvanceAction = slideshow_ns.class_("AdvanceAction", automation.Action)
 PreviousAction = slideshow_ns.class_("PreviousAction", automation.Action)
 PauseAction = slideshow_ns.class_("PauseAction", automation.Action)
 ResumeAction = slideshow_ns.class_("ResumeAction", automation.Action)
+RefreshAction = slideshow_ns.class_("RefreshAction", automation.Action)
 EnqueueAction = slideshow_ns.class_("EnqueueAction", automation.Action)
 
 CONFIG_SCHEMA = cv.Schema({
@@ -160,6 +161,17 @@ async def slideshow_pause_to_code(config, action_id, template_arg, args):
     }),
 )
 async def slideshow_resume_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    return cg.new_Pvariable(action_id, template_arg, paren)
+
+@automation.register_action(
+    "slideshow.refresh",
+    RefreshAction,
+    cv.Schema({
+        cv.GenerateID(): cv.use_id(SlideshowComponent),
+    }),
+)
+async def slideshow_refresh_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)
 
