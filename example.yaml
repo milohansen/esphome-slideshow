@@ -124,14 +124,14 @@ online_image:
 slideshow:
   id: my_slideshow
   
-  source: !lambda |-
-    // Simple static queue builder
-    std::vector<std::string> queue;
-    queue.push_back("${url}");
-    queue.push_back("${url}");
-    queue.push_back("${url}");
-    queue.push_back("${url}");
-    return queue;
+  # source: !lambda |-
+  #   // Simple static queue builder
+  #   std::vector<std::string> queue;
+  #   queue.push_back("${url}");
+  #   queue.push_back("${url}");
+  #   queue.push_back("${url}");
+  #   queue.push_back("${url}");
+  #   return queue;
 
   advance_interval: 10s
   refresh_interval: 60s

@@ -27,6 +27,7 @@ CONF_ON_ADVANCE = "on_advance"
 CONF_ON_IMAGE_READY = "on_image_ready"
 CONF_ON_QUEUE_UPDATED = "on_queue_updated"
 CONF_ON_ERROR = "on_error"
+CONF_ON_REFRESH = "on_refresh"
 
 slideshow_ns = cg.esphome_ns.namespace("slideshow")
 SlideshowComponent = slideshow_ns.class_("SlideshowComponent", cg.Component)
@@ -36,24 +37,23 @@ OnAdvanceTrigger = slideshow_ns.class_("OnAdvanceTrigger", automation.Trigger.te
 OnImageReadyTrigger = slideshow_ns.class_("OnImageReadyTrigger", automation.Trigger.template(cg.size_t, cg.bool_))
 OnQueueUpdatedTrigger = slideshow_ns.class_("OnQueueUpdatedTrigger", automation.Trigger.template(cg.size_t))
 OnErrorTrigger = slideshow_ns.class_("OnErrorTrigger", automation.Trigger.template(cg.std_string))
+OnRefreshTrigger = slideshow_ns.class_("OnRefreshTrigger", automation.Trigger.template(cg.size_t))
 
 # Actions
 AdvanceAction = slideshow_ns.class_("AdvanceAction", automation.Action)
 PreviousAction = slideshow_ns.class_("PreviousAction", automation.Action)
 PauseAction = slideshow_ns.class_("PauseAction", automation.Action)
 ResumeAction = slideshow_ns.class_("ResumeAction", automation.Action)
-RefreshQueueAction = slideshow_ns.class_("RefreshQueueAction", automation.Action)
+EnqueueAction = slideshow_ns.class_("EnqueueAction", automation.Action)
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(SlideshowComponent),
-
-    cv.Optional(CONF_SOURCE): cv.returning_lambda,
 
     cv.Optional(CONF_ADVANCE_INTERVAL): cv.positive_time_period_milliseconds,
     cv.Optional(CONF_REFRESH_INTERVAL): cv.positive_time_period_milliseconds,
 
     cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(cv.use_id(online_image.OnlineImage)),
-    
+
     cv.Optional(CONF_ON_ADVANCE): automation.validate_automation({
         cv.GenerateID(automation.CONF_TRIGGER_ID): cv.declare_id(OnAdvanceTrigger),
     }),
@@ -66,6 +66,9 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_ON_ERROR): automation.validate_automation({
         cv.GenerateID(automation.CONF_TRIGGER_ID): cv.declare_id(OnErrorTrigger),
     }),
+    cv.Optional(CONF_ON_REFRESH): automation.validate_automation({
+        cv.GenerateID(automation.CONF_TRIGGER_ID): cv.declare_id(OnRefreshTrigger),
+    }),
 }).extend(cv.COMPONENT_SCHEMA)
 
 
@@ -75,14 +78,7 @@ async def to_code(config):
 
     # Configuration
     cg.add(var.set_advance_interval(config[CONF_ADVANCE_INTERVAL]))
-    cg.add(var.set_queue_refresh_interval(config[CONF_REFRESH_INTERVAL]))
-
-    # Handle the source lambda
-    if CONF_SOURCE in config:
-        template_ = await cg.process_lambda(
-            config[CONF_SOURCE], [], return_type=cg.std_vector.template(cg.std_string)
-        )
-        cg.add(var.set_queue_builder(template_)) # pyright: ignore[reportArgumentType]
+    cg.add(var.set_refresh_interval(config[CONF_REFRESH_INTERVAL]))
 
     # Add image slots
     for slot_id in config[CONF_IMAGE_SLOTS]:
@@ -113,6 +109,10 @@ async def to_code(config):
     for conf in config.get(CONF_ON_ERROR, []):
         trigger = cg.new_Pvariable(conf[automation.CONF_TRIGGER_ID], var)
         await automation.build_automation(trigger, [(cg.std_string, "x")], conf)
+
+    for conf in config.get(CONF_ON_REFRESH, []):
+        trigger = cg.new_Pvariable(conf[automation.CONF_TRIGGER_ID], var)
+        await automation.build_automation(trigger, [(cg.size_t, "current_size")], conf)
 
 
 # Actions
@@ -165,12 +165,20 @@ async def slideshow_resume_to_code(config, action_id, template_arg, args):
 
 
 @automation.register_action(
-    "slideshow.refresh_queue",
-    RefreshQueueAction,
+    "slideshow.enqueue",
+    EnqueueAction,
     cv.Schema({
         cv.GenerateID(): cv.use_id(SlideshowComponent),
+        cv.Required("items"): cv.returning_lambda, # Accepts a lambda returning vector<string>
     }),
 )
-async def slideshow_refresh_queue_to_code(config, action_id, template_arg, args):
+async def slideshow_enqueue_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
-    return cg.new_Pvariable(action_id, template_arg, paren)
+    var = cg.new_Pvariable(action_id, template_arg, paren)
+    
+    # Process the lambda to get the vector
+    template_ = await cg.process_lambda(
+        config["items"], args, return_type=cg.std_vector.template(cg.std_string)
+    )
+    cg.add(var.set_items(template_)) # pyright: ignore[reportArgumentType]
+    return var

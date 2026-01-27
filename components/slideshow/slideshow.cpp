@@ -28,22 +28,21 @@ namespace esphome
         return;
       }
 
-      if (backend_url_.empty() || device_id_.empty())
-      {
-        ESP_LOGE(TAG, "Backend URL and device ID must be configured!");
-        mark_failed();
-        return;
-      }
+      // if (backend_url_.empty() || device_id_.empty())
+      // {
+      //   ESP_LOGE(TAG, "Backend URL and device ID must be configured!");
+      //   mark_failed();
+      //   return;
+      // }
 
-      // Initial queue fetch
-      refresh_queue();
+      on_refresh_callbacks_.call(0); // Initial call with size 0
     }
 
     void SlideshowComponent::dump_config()
     {
       ESP_LOGCONFIG(TAG, "Slideshow:");
       ESP_LOGCONFIG(TAG, "  Advance interval: %ums", advance_interval_);
-      ESP_LOGCONFIG(TAG, "  Queue refresh interval: %ums", queue_refresh_interval_);
+      ESP_LOGCONFIG(TAG, "  Refresh interval: %ums", refresh_interval_);
       ESP_LOGCONFIG(TAG, "  Image slots: %d", image_slots_.size());
     }
 
@@ -61,12 +60,15 @@ namespace esphome
       }
 
       // Queue refresh timer
-      if (queue_refresh_interval_ > 0)
+      if (refresh_interval_ > 0)
       {
         uint32_t now = millis();
-        if (now - last_queue_refresh_ >= queue_refresh_interval_)
+        if (now - last_refresh_ >= refresh_interval_)
         {
-          refresh();
+          ESP_LOGD(TAG, "Triggering refresh...");
+          // Fire the trigger! Pass current queue size as argument
+          on_refresh_callbacks_.call(queue_.size());
+          last_refresh_ = now;
         }
       }
 
@@ -110,7 +112,7 @@ namespace esphome
       }
 
       ESP_LOGD(TAG, "Advanced to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_].image_id.c_str());
+               current_index_, queue_.size(), queue_[current_index_].source.c_str());
 
       // Trigger slots reload (will prefetch next)
       ensure_slots_loaded_();
@@ -138,7 +140,7 @@ namespace esphome
       }
 
       ESP_LOGD(TAG, "Went back to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_].image_id.c_str());
+               current_index_, queue_.size(), queue_[current_index_].source.c_str());
 
       ensure_slots_loaded_();
       on_advance_callbacks_.call(current_index_);
@@ -179,17 +181,29 @@ namespace esphome
 
       current_index_ = index;
       ESP_LOGI(TAG, "Jumped to index %d (ID: %s)",
-               current_index_, queue_[current_index_].image_id.c_str());
+               current_index_, queue_[current_index_].source.c_str());
 
       ensure_slots_loaded_();
       on_advance_callbacks_.call(current_index_);
     }
 
-    void SlideshowComponent::refresh()
+    void SlideshowComponent::enqueue(const std::vector<std::string> &items)
     {
-      ESP_LOGD(TAG, "Refreshing queue...");
-      update_queue_from_builder_();
-      last_refresh_ = millis();
+      if (items.empty())
+        return;
+
+      ESP_LOGI(TAG, "Enqueuing %d new items", items.size());
+
+      for (const auto &str : items)
+      {
+        QueueItem item;
+        item.source = str; // Store the URL (or "URL|COLOR" string)
+        queue_.push_back(item);
+      }
+
+      // Notify listeners and update slots
+      on_queue_updated_callbacks_.call(queue_.size());
+      ensure_slots_loaded_();
     }
 
     SlideshowSlot *SlideshowComponent::get_current_image()
@@ -231,7 +245,7 @@ namespace esphome
         if (pair.second == slot_index)
         {
           ESP_LOGI(TAG, "Loaded image %s (queue index %d)",
-                   queue_[pair.first].image_id.c_str(), pair.first);
+                   queue_[pair.first].source.c_str(), pair.first);
 
           // Fire callback
           on_image_ready_callbacks_.call(pair.first, false);
@@ -252,7 +266,7 @@ namespace esphome
       {
         if (pair.second == slot_index)
         {
-          std::string error = "Failed to load image: " + queue_[pair.first].image_id;
+          std::string error = "Failed to load image: " + queue_[pair.first].source;
           on_error_callbacks_.call(error);
 
           // Clear the mapping so we can retry

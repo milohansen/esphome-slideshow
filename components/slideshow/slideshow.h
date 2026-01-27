@@ -11,7 +11,6 @@
 #include <map>
 #include <set>
 
-
 namespace esphome
 {
   namespace slideshow
@@ -57,7 +56,7 @@ namespace esphome
 
       // Configuration
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
-      void set_queue_refresh_interval(uint32_t ms) { queue_refresh_interval_ = ms; }
+      void set_refresh_interval(uint32_t ms) { refresh_interval_ = ms; }
 
       void set_queue_builder(queue_builder_t &&builder) { queue_builder_ = builder; }
 
@@ -82,6 +81,9 @@ namespace esphome
       SlideshowSlot *get_current_image();
       SlideshowSlot *get_slot(size_t slot_index);
 
+      void enqueue(const std::vector<std::string> &items);
+      void clear_queue(); // Optional utility
+
       // Called by online_image callbacks
       void on_image_ready(size_t slot_index);
       void on_image_error(size_t slot_index);
@@ -102,6 +104,10 @@ namespace esphome
       void add_on_error_callback(std::function<void(std::string)> &&callback)
       {
         on_error_callbacks_.add(std::move(callback));
+      }
+      void add_on_refresh_callback(std::function<void(size_t)> &&callback)
+      {
+        on_refresh_callbacks_.add(std::move(callback));
       }
 
     protected:
@@ -144,6 +150,7 @@ namespace esphome
       CallbackManager<void(size_t, bool)> on_image_ready_callbacks_;
       CallbackManager<void(size_t)> on_queue_updated_callbacks_;
       CallbackManager<void(std::string)> on_error_callbacks_;
+      CallbackManager<void(size_t)> on_refresh_callbacks_;
     };
 
     // Triggers
@@ -184,6 +191,16 @@ namespace esphome
       {
         parent->add_on_error_callback([this](std::string error)
                                       { this->trigger(error); });
+      }
+    };
+
+    class OnRefreshTrigger : public Trigger<size_t>
+    {
+    public:
+      explicit OnRefreshTrigger(SlideshowComponent *parent)
+      {
+        parent->add_on_refresh_callback([this](size_t current_size)
+                                        { this->trigger(current_size); });
       }
     };
 
@@ -233,14 +250,21 @@ namespace esphome
     };
 
     template <typename... Ts>
-    class RefreshAction : public Action<Ts...>
+    class EnqueueAction : public Action<Ts...>
     {
     public:
-      explicit RefreshAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
-      void play(Ts... x) override { slideshow_->refresh(); }
+      explicit EnqueueAction(SlideshowComponent *parent) : parent_(parent) {}
+      void play(Ts... x) override
+      {
+        // This allows the action to take a std::vector<std::string>
+        this->parent_->enqueue(this->items_);
+      }
+      // Helper to set items from YAML
+      void set_items(const std::vector<std::string> &items) { items_ = items; }
 
     protected:
-      SlideshowComponent *slideshow_;
+      SlideshowComponent *parent_;
+      std::vector<std::string> items_;
     };
 
   } // namespace slideshow
