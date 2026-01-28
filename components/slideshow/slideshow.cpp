@@ -35,10 +35,10 @@ namespace esphome
         return;
       } else {
         this->i_slots_.resize(slot_count_, nullptr);
-        for (size_t i = 0; i < slot_count_; i++)
-        {
-          this->i_slots_[i] = new EmbeddedImageSlot(new esphome::image::Image());
-        }
+        // for (size_t i = 0; i < slot_count_; i++)
+        // {
+        //   this->i_slots_[i] = new EmbeddedImageSlot(new esphome::image::Image());
+        // }
         
       }
 
@@ -127,7 +127,7 @@ namespace esphome
       on_advance_callbacks_.call(current_index_);
 
       // Trigger slots reload (will prefetch next)
-      ensure_slots_loaded_();
+      // ensure_slots_loaded_();
     }
 
     void SlideshowComponent::previous()
@@ -151,7 +151,6 @@ namespace esphome
       ESP_LOGD(TAG, "Went back to index %d/%d (ID: %s)",
                current_index_, queue_.size(), queue_[current_index_].source.c_str());
 
-      ensure_slots_loaded_();
       on_advance_callbacks_.call(current_index_);
     }
 
@@ -197,7 +196,6 @@ namespace esphome
       ESP_LOGI(TAG, "Jumped to index %d (ID: %s)",
                current_index_, queue_[current_index_].source.c_str());
 
-      ensure_slots_loaded_();
       on_advance_callbacks_.call(current_index_);
     }
 
@@ -215,9 +213,8 @@ namespace esphome
         queue_.push_back(item);
       }
 
-      // Notify listeners and update slots
+      // Notify listeners
       on_queue_updated_callbacks_.call(queue_.size());
-      ensure_slots_loaded_();
     }
 
     SlideshowSlot *SlideshowComponent::get_current_image()
