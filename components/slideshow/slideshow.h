@@ -85,7 +85,7 @@ namespace esphome
     class SlideshowComponent : public Component
     {
     public:
-      ~SlideshowComponent() override;
+      ~SlideshowComponent();
       void setup() override;
       void loop() override;
       void dump_config() override;
@@ -111,6 +111,11 @@ namespace esphome
       void resume();
       void jump_to(size_t index);
       void refresh();
+
+      void suspend(bool suspend)
+      {
+        suspended_ = suspend;
+      }
 
       // State queries
       size_t current_index() const { return current_index_; }
@@ -163,6 +168,7 @@ namespace esphome
       uint32_t advance_interval_{5};
       uint32_t refresh_interval_{25};
       bool paused_{false};
+      bool suspended_{false};
 
       // The Builder Lambda
       queue_builder_t queue_builder_;
@@ -315,6 +321,25 @@ namespace esphome
     protected:
       SlideshowComponent *parent_;
       std::vector<std::string> items_;
+    };
+    
+    template <typename... Ts>
+    class SuspendAction : public Action<Ts...>
+    {
+    public:
+      explicit SuspendAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
+      void play(const Ts &...x) override { this->slideshow_->suspend(true); }
+    protected:
+      SlideshowComponent *slideshow_;
+    };
+    template <typename... Ts>
+    class UnsuspendAction : public Action<Ts...>
+    {
+    public:
+      explicit UnsuspendAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
+      void play(const Ts &...x) override { this->slideshow_->suspend(false); }
+    protected:
+      SlideshowComponent *slideshow_;
     };
 
   } // namespace slideshow

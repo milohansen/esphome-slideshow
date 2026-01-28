@@ -126,8 +126,8 @@ slideshow:
 
   placeholder: loading_placeholder
 
-  advance_interval: 10s
-  refresh_interval: 60s
+  advance_interval: 10min
+  refresh_interval: 60min
 
   image_slots:
     - slide_slot_0

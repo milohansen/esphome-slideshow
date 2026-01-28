@@ -65,6 +65,9 @@ namespace esphome
 
     void SlideshowComponent::loop()
     {
+      if (suspended_)
+        return;
+
       // TODO: Schedule intervals properly instead of checking every loop
 
       // Auto-advance timer
@@ -409,11 +412,12 @@ namespace esphome
     {
       for (size_t i = 0; i < image_slots_.size(); i++)
       {
+        size_t mod_i = (i + current_index_) % image_slots_.size();
         // Check if slot is mapped to a queue index
         bool in_use = false;
         for (const auto &pair : loaded_images_)
         {
-          if (pair.second == i)
+          if (pair.second == mod_i)
           {
             in_use = true;
             break;
@@ -421,14 +425,14 @@ namespace esphome
         }
 
         // Check if slot is currently loading
-        if (loading_slots_.find(i) != loading_slots_.end())
+        if (loading_slots_.find(mod_i) != loading_slots_.end())
         {
           in_use = true;
         }
 
         if (!in_use)
         {
-          return i;
+          return mod_i;
         }
       }
 

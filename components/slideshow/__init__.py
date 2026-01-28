@@ -47,6 +47,9 @@ ResumeAction = slideshow_ns.class_("ResumeAction", automation.Action)
 RefreshAction = slideshow_ns.class_("RefreshAction", automation.Action)
 EnqueueAction = slideshow_ns.class_("EnqueueAction", automation.Action)
 
+SuspendAction = slideshow_ns.class_("SuspendAction", automation.Action)
+UnsuspendAction = slideshow_ns.class_("UnsuspendAction", automation.Action)
+
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(SlideshowComponent),
 
@@ -197,3 +200,25 @@ async def slideshow_enqueue_to_code(config, action_id, template_arg, args):
     )
     cg.add(var.set_items(template_)) # pyright: ignore[reportArgumentType]
     return var
+
+@automation.register_action(
+    "slideshow.suspend",
+    SuspendAction,
+    automation.maybe_simple_id({
+        cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
+    }), # pyright: ignore[reportArgumentType]
+)
+async def slideshow_suspend_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    return cg.new_Pvariable(action_id, template_arg, paren)
+
+@automation.register_action(
+    "slideshow.unsuspend",
+    UnsuspendAction,
+    automation.maybe_simple_id({
+        cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
+    }), # pyright: ignore[reportArgumentType]
+)
+async def slideshow_unsuspend_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    return cg.new_Pvariable(action_id, template_arg, paren)
