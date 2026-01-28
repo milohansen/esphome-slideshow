@@ -123,11 +123,11 @@ namespace esphome
       ESP_LOGD(TAG, "Advanced to index %d/%d (ID: %s)",
                current_index_, queue_.size(), queue_[current_index_].source.c_str());
 
-      // Trigger slots reload (will prefetch next)
-      ensure_slots_loaded_();
-
       // Fire callback
       on_advance_callbacks_.call(current_index_);
+
+      // Trigger slots reload (will prefetch next)
+      ensure_slots_loaded_();
     }
 
     void SlideshowComponent::previous()
@@ -328,7 +328,7 @@ namespace esphome
       }
 
       on_queue_updated_callbacks_.call(queue_.size());
-      ensure_slots_loaded_();
+      // ensure_slots_loaded_();
     }
 
     void SlideshowComponent::ensure_slots_loaded_()
