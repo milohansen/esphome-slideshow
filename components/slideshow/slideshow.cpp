@@ -451,6 +451,13 @@ namespace esphome
 
       slot->set_source(item.source);
       slot->update();
+      slot->callback_once([this, slot_index](bool success)
+                          {
+        if (success) {
+        this->on_image_ready(slot_index);
+        } else {
+        this->on_image_error(slot_index);
+        } });
     }
 
     bool SlideshowComponent::is_slot_loading_(size_t slot_index)

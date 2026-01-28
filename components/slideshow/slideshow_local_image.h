@@ -13,7 +13,13 @@ namespace esphome
     class LocalImageSlot : public SlideshowSlot
     {
     public:
-      LocalImageSlot(local_image::LocalImage *img) : img_(img) {}
+      LocalImageSlot(local_image::LocalImage *img) : img_(img)
+      {
+        this->img_->add_on_finished_callback([this](bool success)
+                                             { this->callbacks_.call(success); });
+        this->img_->add_on_error_callback([this]()
+                                          { this->callbacks_.call(false); });
+      }
 
       void set_source(const std::string &source) override
       {

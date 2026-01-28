@@ -15,6 +15,59 @@ namespace esphome
 {
   namespace slideshow
   {
+    // template <typename... Ts>
+    // class OnceCallbackManager<void(Ts...)>
+    // {
+    // public:
+    //   /// Add a callback to the list.
+    //   void add(std::function<void(Ts...)> &&callback) { this->callbacks_.push_back(std::move(callback)); }
+
+    //   /// Call all callbacks in this manager.
+    //   void call(Ts... args)
+    //   {
+    //     for (auto &cb : this->callbacks_)
+    //     {
+    //       cb(args...);
+    //     }
+
+    //     this->callbacks_.clear();
+    //   }
+    //   size_t size() const { return this->callbacks_.size(); }
+
+    //   void clear()
+    //   {
+    //     this->callbacks_.clear();
+    //   }
+
+    // protected:
+    //   std::vector<std::function<void(Ts...)>> callbacks_;
+    // };
+    class OnceCallbackManager
+    {
+    public:
+      /// Add a callback to the list.
+      void add(std::function<void(bool)> &&callback) { this->callbacks_.push_back(std::move(callback)); }
+
+      /// Call all callbacks in this manager.
+      void call(bool arg)
+      {
+        for (auto &cb : this->callbacks_)
+        {
+          cb(arg);
+        }
+
+        this->callbacks_.clear();
+      }
+      size_t size() const { return this->callbacks_.size(); }
+
+      void clear()
+      {
+        this->callbacks_.clear();
+      }
+
+    protected:
+      std::vector<std::function<void(bool)>> callbacks_;
+    };
 
     // Abstract interface for any slot (Online, Local, Generated)
     class SlideshowSlot
@@ -37,6 +90,15 @@ namespace esphome
       // Status check
       virtual bool is_ready() = 0;
       virtual bool is_failed() = 0;
+
+      void callback_once(std::function<void(bool)> &&cb)
+      {
+        this->callbacks_.add(std::move(cb));
+      }
+
+    protected:
+      // OnceCallbackManager<void(bool)> callbacks_;
+      OnceCallbackManager callbacks_;
     };
 
     struct QueueItem

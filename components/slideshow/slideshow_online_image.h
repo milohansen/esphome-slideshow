@@ -12,15 +12,13 @@ namespace esphome
     class OnlineImageSlot : public SlideshowSlot
     {
     public:
-      OnlineImageSlot(esphome::online_image::OnlineImage *img) : img_(img) {}
-      // OnlineImageSlot(std::string url) {
-      //   this.img_ = new esphome::online_image::OnlineImage(url, 0, 0,
-      //                                                   esphome::online_image::ImageFormat::AUTO,
-      //                                                   esphome::image::ImageType::IMAGE_TYPE_RGB565,
-      //                                                   esphome::image::TRANSPARENCY_NONE,
-      //                                                   1024 * 50,
-      //                                                   true);
-      // }
+      OnlineImageSlot(esphome::online_image::OnlineImage *img) : img_(img)
+      {
+        this->img_->add_on_finished_callback([this](bool success)
+                                             { this->callbacks_.call(success); });
+        this->img_->add_on_error_callback([this]()
+                                          { this->callbacks_.call(false); });
+      }
 
       void set_source(const std::string &source) override
       {

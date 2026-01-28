@@ -21,10 +21,9 @@ namespace esphome
 
       void update() override
       {
-        // this->img_->load(); // Assuming it has a load/update method
-        ESP_LOGI("slideshow", "EmbeddedImageSlot does not support update. Image is assumed to be always ready.");
+        this->callbacks_.call(true);
       }
-      
+
       void release() override
       {
         ESP_LOGI("slideshow", "EmbeddedImageSlot does not support release. Image cannot be released.");

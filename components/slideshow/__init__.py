@@ -2,10 +2,9 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
-from esphome.components import online_image, http_request
+from esphome.components import online_image
 from esphome.const import (
     CONF_ID,
-    CONF_URL,
 )
 
 # Check if local_image is available in the environment
@@ -120,9 +119,9 @@ async def to_code(config):
 @automation.register_action(
     "slideshow.advance",
     AdvanceAction,
-    cv.Schema({
-        cv.GenerateID(): cv.use_id(SlideshowComponent),
-    }),
+    automation.maybe_simple_id({
+        cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
+    }), # pyright: ignore[reportArgumentType]
 )
 async def slideshow_advance_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -132,9 +131,9 @@ async def slideshow_advance_to_code(config, action_id, template_arg, args):
 @automation.register_action(
     "slideshow.previous",
     PreviousAction,
-    cv.Schema({
-        cv.GenerateID(): cv.use_id(SlideshowComponent),
-    }),
+    automation.maybe_simple_id({
+        cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
+    }), # pyright: ignore[reportArgumentType]
 )
 async def slideshow_previous_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -144,9 +143,9 @@ async def slideshow_previous_to_code(config, action_id, template_arg, args):
 @automation.register_action(
     "slideshow.pause",
     PauseAction,
-    cv.Schema({
-        cv.GenerateID(): cv.use_id(SlideshowComponent),
-    }),
+    automation.maybe_simple_id({
+        cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
+    }), # pyright: ignore[reportArgumentType]
 )
 async def slideshow_pause_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -156,9 +155,9 @@ async def slideshow_pause_to_code(config, action_id, template_arg, args):
 @automation.register_action(
     "slideshow.resume",
     ResumeAction,
-    cv.Schema({
-        cv.GenerateID(): cv.use_id(SlideshowComponent),
-    }),
+    automation.maybe_simple_id({
+        cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
+    }), # pyright: ignore[reportArgumentType]
 )
 async def slideshow_resume_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
@@ -167,9 +166,9 @@ async def slideshow_resume_to_code(config, action_id, template_arg, args):
 @automation.register_action(
     "slideshow.refresh",
     RefreshAction,
-    cv.Schema({
-        cv.GenerateID(): cv.use_id(SlideshowComponent),
-    }),
+    automation.maybe_simple_id({
+        cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
+    }), # pyright: ignore[reportArgumentType]
 )
 async def slideshow_refresh_to_code(config, action_id, template_arg, args):
     paren = await cg.get_variable(config[CONF_ID])
