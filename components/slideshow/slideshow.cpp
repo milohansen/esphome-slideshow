@@ -17,6 +17,15 @@ namespace esphome
 
     static const char *const TAG = "slideshow";
 
+    SlideshowComponent::~SlideshowComponent()
+    {
+      for (auto *slot : this->image_slots_)
+      {
+        delete slot;
+      }
+      this->image_slots_.clear();
+    }
+
     void SlideshowComponent::setup()
     {
       ESP_LOGCONFIG(TAG, "Setting up slideshow...");
@@ -33,13 +42,14 @@ namespace esphome
         ESP_LOGE(TAG, "Slot count must be greater than zero!");
         mark_failed();
         return;
-      } else {
+      }
+      else
+      {
         this->i_slots_.resize(slot_count_, nullptr);
         // for (size_t i = 0; i < slot_count_; i++)
         // {
         //   this->i_slots_[i] = new EmbeddedImageSlot(new esphome::image::Image());
         // }
-        
       }
 
       this->on_refresh_callbacks_.call(0);

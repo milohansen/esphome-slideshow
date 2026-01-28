@@ -24,12 +24,13 @@ namespace esphome
       /// Call all callbacks in this manager.
       void call(bool arg)
       {
-        for (auto &cb : this->callbacks_)
+        std::vector<std::function<void(bool)>> current_callbacks = std::move(this->callbacks_);
+        this->callbacks_.clear();
+
+        for (auto &cb : current_callbacks)
         {
           cb(arg);
         }
-
-        this->callbacks_.clear();
       }
       size_t size() const { return this->callbacks_.size(); }
 
@@ -84,6 +85,7 @@ namespace esphome
     class SlideshowComponent : public Component
     {
     public:
+      ~SlideshowComponent() override;
       void setup() override;
       void loop() override;
       void dump_config() override;
