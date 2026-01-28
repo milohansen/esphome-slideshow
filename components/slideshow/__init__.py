@@ -50,8 +50,8 @@ EnqueueAction = slideshow_ns.class_("EnqueueAction", automation.Action)
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(SlideshowComponent),
 
-    cv.Optional(CONF_ADVANCE_INTERVAL): cv.positive_time_period_milliseconds,
-    cv.Optional(CONF_REFRESH_INTERVAL): cv.positive_time_period_milliseconds,
+    cv.Optional(CONF_ADVANCE_INTERVAL): cv.positive_time_period_minutes,
+    cv.Optional(CONF_REFRESH_INTERVAL): cv.positive_time_period_minutes,
 
     cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(cv.use_id(online_image.OnlineImage)),
     cv.Required(CONF_PLACEHOLDER): cv.use_id(image.Image),

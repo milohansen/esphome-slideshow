@@ -158,8 +158,8 @@ namespace esphome
       bool is_slot_loading_(size_t slot_index);
 
       // State
-      uint32_t advance_interval_{10000};
-      uint32_t refresh_interval_{60000};
+      uint32_t advance_interval_{5};
+      uint32_t refresh_interval_{25};
       bool paused_{false};
 
       // The Builder Lambda

@@ -48,18 +48,20 @@ namespace esphome
     void SlideshowComponent::dump_config()
     {
       ESP_LOGCONFIG(TAG, "Slideshow:");
-      ESP_LOGCONFIG(TAG, "  Advance interval: %ums", advance_interval_);
-      ESP_LOGCONFIG(TAG, "  Refresh interval: %ums", refresh_interval_);
+      ESP_LOGCONFIG(TAG, "  Advance interval: %um", advance_interval_);
+      ESP_LOGCONFIG(TAG, "  Refresh interval: %um", refresh_interval_);
       ESP_LOGCONFIG(TAG, "  Image slots: %d", image_slots_.size());
     }
 
     void SlideshowComponent::loop()
     {
+      // TODO: Schedule intervals properly instead of checking every loop
+
       // Auto-advance timer
       if (advance_interval_ > 0 && !paused_ && queue_.size() > 0)
       {
         uint32_t now = millis();
-        if (now - last_advance_ >= advance_interval_)
+        if (now - last_advance_ >= advance_interval_ * 60000)
         {
           advance();
           last_advance_ = now;
@@ -70,7 +72,7 @@ namespace esphome
       if (refresh_interval_ > 0)
       {
         uint32_t now = millis();
-        if (now - last_refresh_ >= refresh_interval_)
+        if (now - last_refresh_ >= refresh_interval_ * 60000)
         {
           ESP_LOGD(TAG, "Triggering refresh...");
           // Fire the trigger! Pass current queue size as argument
