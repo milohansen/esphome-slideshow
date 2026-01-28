@@ -14,10 +14,17 @@ namespace esphome
     public:
       OnlineImageSlot(esphome::online_image::OnlineImage *img) : img_(img)
       {
-        this->img_->add_on_finished_callback([this](bool success)
-                                             { this->callbacks_.call(success); });
+        this->img_->add_on_finished_callback([this](bool cached)
+                                             {
+                                              ESP_LOGI("slideshow", "Image finished with cached: %s", cached ? "true" : "false");
+                                              this->callbacks_.call(true);
+                                              this->ready_ = true;
+                                              this->failed_ = false; });
         this->img_->add_on_error_callback([this]()
-                                          { this->callbacks_.call(false); });
+                                          {
+                                            this->callbacks_.call(false);
+                                            this->ready_ = false;
+                                            this->failed_ = true; });
       }
 
       void set_source(const std::string &source) override
@@ -42,16 +49,18 @@ namespace esphome
 
       bool is_ready() override
       {
-        return this->img_->is_ready();
+        return this->ready_;
       }
 
       bool is_failed() override
       {
-        return this->img_->is_failed();
+        return this->failed_;
       }
 
     protected:
       online_image::OnlineImage *img_;
+      bool ready_{false};
+      bool failed_{false};
     };
 
   } // namespace slideshow

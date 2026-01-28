@@ -2,7 +2,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
-from esphome.components import online_image
+from esphome.components import online_image, image
 from esphome.const import (
     CONF_ID,
 )
@@ -20,8 +20,9 @@ AUTO_LOAD = ["online_image"]
 CONF_SOURCE = "source"
 CONF_ADVANCE_INTERVAL = "advance_interval"
 CONF_REFRESH_INTERVAL = "refresh_interval"
-CONF_AUTO_ADVANCE = "auto_advance"
+CONF_PLACEHOLDER = "placeholder"
 CONF_IMAGE_SLOTS = "image_slots"
+CONF_IMAGE_SLOT_COUNT = "image_slot_count"
 CONF_ON_ADVANCE = "on_advance"
 CONF_ON_IMAGE_READY = "on_image_ready"
 CONF_ON_QUEUE_UPDATED = "on_queue_updated"
@@ -53,6 +54,8 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_REFRESH_INTERVAL): cv.positive_time_period_milliseconds,
 
     cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(cv.use_id(online_image.OnlineImage)),
+    cv.Required(CONF_PLACEHOLDER): cv.use_id(image.Image),
+    cv.Required(CONF_IMAGE_SLOT_COUNT): cv.positive_int,
 
     cv.Optional(CONF_ON_ADVANCE): automation.validate_automation({
         cv.GenerateID(automation.CONF_TRIGGER_ID): cv.declare_id(OnAdvanceTrigger),
@@ -79,6 +82,7 @@ async def to_code(config):
     # Configuration
     cg.add(var.set_advance_interval(config[CONF_ADVANCE_INTERVAL]))
     cg.add(var.set_refresh_interval(config[CONF_REFRESH_INTERVAL]))
+    cg.add(var.set_slot_count(config[CONF_IMAGE_SLOT_COUNT]))
 
     # Add image slots
     for slot_id in config[CONF_IMAGE_SLOTS]:

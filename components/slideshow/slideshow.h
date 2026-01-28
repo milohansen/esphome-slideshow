@@ -15,33 +15,6 @@ namespace esphome
 {
   namespace slideshow
   {
-    // template <typename... Ts>
-    // class OnceCallbackManager<void(Ts...)>
-    // {
-    // public:
-    //   /// Add a callback to the list.
-    //   void add(std::function<void(Ts...)> &&callback) { this->callbacks_.push_back(std::move(callback)); }
-
-    //   /// Call all callbacks in this manager.
-    //   void call(Ts... args)
-    //   {
-    //     for (auto &cb : this->callbacks_)
-    //     {
-    //       cb(args...);
-    //     }
-
-    //     this->callbacks_.clear();
-    //   }
-    //   size_t size() const { return this->callbacks_.size(); }
-
-    //   void clear()
-    //   {
-    //     this->callbacks_.clear();
-    //   }
-
-    // protected:
-    //   std::vector<std::function<void(Ts...)>> callbacks_;
-    // };
     class OnceCallbackManager
     {
     public:
@@ -119,6 +92,7 @@ namespace esphome
       // Configuration
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
       void set_refresh_interval(uint32_t ms) { refresh_interval_ = ms; }
+      void set_slot_count(size_t count) { slot_count_ = count; }
 
       void set_queue_builder(queue_builder_t &&builder) { queue_builder_ = builder; }
 
@@ -196,8 +170,9 @@ namespace esphome
       size_t current_index_{0};
 
       // Image slots
-      // std::vector<online_image::OnlineImage *> image_slots_;
       std::vector<SlideshowSlot *> image_slots_;
+      size_t slot_count_{0};
+      std::vector<SlideshowSlot *> i_slots_;
 
       // Mapping: queue_index -> slot_index
       std::map<size_t, size_t> loaded_images_;

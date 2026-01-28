@@ -28,12 +28,19 @@ namespace esphome
         return;
       }
 
-      // if (backend_url_.empty() || device_id_.empty())
-      // {
-      //   ESP_LOGE(TAG, "Backend URL and device ID must be configured!");
-      //   mark_failed();
-      //   return;
-      // }
+      if (slot_count_ == 0)
+      {
+        ESP_LOGE(TAG, "Slot count must be greater than zero!");
+        mark_failed();
+        return;
+      } else {
+        this->i_slots_.resize(slot_count_, nullptr);
+        for (size_t i = 0; i < slot_count_; i++)
+        {
+          this->i_slots_[i] = new EmbeddedImageSlot(new esphome::image::Image());
+        }
+        
+      }
 
       this->on_refresh_callbacks_.call(0);
     }
