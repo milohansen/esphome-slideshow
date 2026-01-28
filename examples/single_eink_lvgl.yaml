@@ -1,0 +1,30 @@
+# This is a simple example configuration file for using LVGL with an E-Ink display loading one image at a time.
+# It uses a slideshow component to manage loading and displaying images from online sources.
+# The `slideshow` component and `lvgl` components are functional, everything else is boilerplate.
+
+slideshow:
+  id: my_slideshow
+
+  placeholder: loading_placeholder
+  image_slot_count: 1
+
+  advance_interval: 10m
+  refresh_interval: 60m
+
+  on_advance:
+    # Pause LVGL to avoid rendering artifacts during E-Ink refresh
+    - lvgl.pause:
+        show_snow: false
+
+  on_image_ready:
+    # Resume LVGL after the next image is ready
+    - lvgl.resume:
+
+  on_queue_updated:
+    - lambda: |-
+        ESP_LOGI("slideshow", "Queue updated: %d images", x);
+
+  on_error:
+    - lambda: |-
+        ESP_LOGE("slideshow", "Error: %s", x.c_str());
+
