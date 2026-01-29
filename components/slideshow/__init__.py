@@ -82,9 +82,9 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    # Configuration
-    cg.add(var.set_advance_interval(config[CONF_ADVANCE_INTERVAL]))
-    cg.add(var.set_refresh_interval(config[CONF_REFRESH_INTERVAL]))
+    # Configuration with defaults
+    cg.add(var.set_advance_interval(config.get(CONF_ADVANCE_INTERVAL, 5)))
+    cg.add(var.set_refresh_interval(config.get(CONF_REFRESH_INTERVAL, 25)))
     cg.add(var.set_slot_count(config[CONF_IMAGE_SLOT_COUNT]))
 
     # Add image slots

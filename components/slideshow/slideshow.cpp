@@ -137,7 +137,8 @@ namespace esphome
       // Fire callback
       on_advance_callbacks_.call(current_index_);
 
-      if (current_index_ + 2 >= queue_.size())
+      // Check if we're near the end using modulo index to avoid overflow
+      if (current_index_mod_ + 2 >= queue_.size())
       {
         needs_more_photos_ = true;
       }
@@ -154,7 +155,15 @@ namespace esphome
         return;
       }
 
-      current_index_--;
+      // Prevent underflow when current_index_ is 0
+      if (current_index_ == 0)
+      {
+        current_index_ = queue_.size() - 1;
+      }
+      else
+      {
+        current_index_--;
+      }
       current_index_mod_ = current_index_ % queue_.size();
 
       ESP_LOGD(TAG, "Went back to index %d/%d (ID: %s)",
