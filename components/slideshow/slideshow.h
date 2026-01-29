@@ -170,12 +170,15 @@ namespace esphome
       bool paused_{false};
       bool suspended_{false};
 
+      bool needs_more_photos_{false};
+
       // The Builder Lambda
       queue_builder_t queue_builder_;
 
       // Queue data
       std::vector<QueueItem> queue_;
       size_t current_index_{0};
+      size_t current_index_mod_{0};
 
       // Image slots
       std::vector<SlideshowSlot *> image_slots_;

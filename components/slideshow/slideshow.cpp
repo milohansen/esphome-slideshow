@@ -96,6 +96,11 @@ namespace esphome
 
       // Ensure proper slots are loaded
       ensure_slots_loaded_();
+
+      if (needs_more_photos_)
+      {
+        refresh();
+      }
     }
 
     void SlideshowComponent::add_image_slot(online_image::OnlineImage *slot)
@@ -123,21 +128,19 @@ namespace esphome
         return;
       }
 
-      if (current_index_ + 1 >= queue_.size())
-      {
-        // End of queue - loop back to start
-        current_index_ = 0;
-      }
-      else
-      {
-        current_index_++;
-      }
+      current_index_++;
+      current_index_mod_ = current_index_ % queue_.size();
 
       ESP_LOGD(TAG, "Advanced to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_mod_].source.c_str());
 
       // Fire callback
       on_advance_callbacks_.call(current_index_);
+
+      if (current_index_ + 2 >= queue_.size())
+      {
+        needs_more_photos_ = true;
+      }
 
       // Trigger slots reload (will prefetch next)
       // ensure_slots_loaded_();
@@ -151,18 +154,11 @@ namespace esphome
         return;
       }
 
-      if (current_index_ == 0)
-      {
-        // At start - wrap to end
-        current_index_ = queue_.size() - 1;
-      }
-      else
-      {
-        current_index_--;
-      }
+      current_index_--;
+      current_index_mod_ = current_index_ % queue_.size();
 
       ESP_LOGD(TAG, "Went back to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_mod_].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
     }
@@ -189,6 +185,7 @@ namespace esphome
     void SlideshowComponent::refresh()
     {
       this->on_refresh_callbacks_.call(0);
+      needs_more_photos_ = false;
     }
 
     void SlideshowComponent::jump_to(size_t index)
@@ -199,15 +196,11 @@ namespace esphome
         return;
       }
 
-      if (index >= queue_.size())
-      {
-        ESP_LOGW(TAG, "Invalid index %d (queue size: %d)", index, queue_.size());
-        return;
-      }
-
       current_index_ = index;
+      current_index_mod_ = current_index_ % queue_.size();
+
       ESP_LOGI(TAG, "Jumped to index %d (ID: %s)",
-               current_index_, queue_[current_index_].source.c_str());
+               current_index_, queue_[current_index_mod_].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
     }
@@ -354,16 +347,18 @@ namespace esphome
       // Always want current
       desired.insert(current_index_);
 
-      // Previous (if exists)
-      if (current_index_ > 0)
+      // Previous (wrapped)
+      if (queue_.size() > 1)
       {
-        desired.insert(current_index_ - 1);
+        size_t prev_index = (current_index_ + queue_.size() - 1) % queue_.size();
+        desired.insert(prev_index);
       }
 
-      // Next (if exists)
-      if (current_index_ + 1 < queue_.size())
+      // Next (wrapped)
+      if (queue_.size() > 1)
       {
-        desired.insert(current_index_ + 1);
+        size_t next_index = (current_index_ + 1) % queue_.size();
+        desired.insert(next_index);
       }
 
       // Release slots outside the desired window
