@@ -108,16 +108,16 @@ namespace esphome
       }
 
       current_index_++;
-      current_index_mod_ = current_index_ % queue_.size();
+      size_t current_index_mod = current_index_ % queue_.size();
 
       ESP_LOGD(TAG, "Advanced to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_mod_].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_mod].source.c_str());
 
       // Fire callback
       on_advance_callbacks_.call(current_index_);
 
       // Check if we're near the end using modulo index to avoid overflow
-      if (current_index_mod_ + 2 >= queue_.size())
+      if (current_index_mod + 2 >= queue_.size())
       {
         needs_more_photos_ = true;
       }
@@ -143,10 +143,10 @@ namespace esphome
       {
         current_index_--;
       }
-      current_index_mod_ = current_index_ % queue_.size();
+      size_t current_index_mod = current_index_ % queue_.size();
 
       ESP_LOGD(TAG, "Went back to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_mod_].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_mod].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
 
@@ -187,11 +187,18 @@ namespace esphome
         return;
       }
 
+      // Validate index is within reasonable bounds
+      if (index >= queue_.size())
+      {
+        ESP_LOGW(TAG, "Cannot jump to index %d: out of bounds (queue size: %d)", index, queue_.size());
+        return;
+      }
+
       current_index_ = index;
-      current_index_mod_ = current_index_ % queue_.size();
+      size_t current_index_mod = current_index_ % queue_.size();
 
       ESP_LOGI(TAG, "Jumped to index %d (ID: %s)",
-               current_index_, queue_[current_index_mod_].source.c_str());
+               current_index_, queue_[current_index_mod].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
 
@@ -206,23 +213,61 @@ namespace esphome
 
       ESP_LOGI(TAG, "Enqueuing %d new items", items.size());
 
+      size_t valid_count = 0;
       for (const auto &str : items)
       {
+        // Validate: skip empty strings or strings that are just whitespace
+        if (str.empty() || str.find_first_not_of(" \t\n\r") == std::string::npos)
+        {
+          ESP_LOGW(TAG, "Skipping empty or whitespace-only item");
+          continue;
+        }
+
         QueueItem item;
         item.source = str; // Store the URL (or "URL|COLOR" string)
         queue_.push_back(item);
+        valid_count++;
       }
 
-      // Notify listeners
-      on_queue_updated_callbacks_.call(queue_.size());
+      if (valid_count > 0)
+      {
+        ESP_LOGI(TAG, "Successfully enqueued %d valid items", valid_count);
+        // Notify listeners
+        on_queue_updated_callbacks_.call(queue_.size());
 
-      // Mark slots as needing reload
-      slots_dirty_ = true;
+        // Mark slots as needing reload
+        slots_dirty_ = true;
+      }
+    }
+
+    void SlideshowComponent::clear_queue()
+    {
+      ESP_LOGI(TAG, "Clearing queue (had %d items)", queue_.size());
+
+      queue_.clear();
+      current_index_ = 0;
+
+      // Release all loaded slots
+      for (const auto &pair : loaded_images_)
+      {
+        release_slot_(pair.second);
+      }
+      loaded_images_.clear();
+      loading_slots_.clear();
+
+      needs_more_photos_ = false;
+
+      // Notify listeners
+      on_queue_updated_callbacks_.call(0);
     }
 
     SlideshowSlot *SlideshowComponent::get_current_image()
     {
-      auto it = loaded_images_.find(current_index_);
+      if (queue_.empty())
+        return nullptr;
+
+      size_t current_index_mod = current_index_ % queue_.size();
+      auto it = loaded_images_.find(current_index_mod);
       if (it != loaded_images_.end())
       {
         size_t slot_idx = it->second;
@@ -340,23 +385,26 @@ namespace esphome
         return;
       }
 
+      // Use modulo for current index to avoid out of bounds
+      size_t current_index_mod = current_index_ % queue_.size();
+
       // Determine which queue indices we want loaded
       std::set<size_t> desired;
 
       // Always want current
-      desired.insert(current_index_);
+      desired.insert(current_index_mod);
 
       // Previous (wrapped)
       if (queue_.size() > 1)
       {
-        size_t prev_index = (current_index_ + queue_.size() - 1) % queue_.size();
+        size_t prev_index = (current_index_mod + queue_.size() - 1) % queue_.size();
         desired.insert(prev_index);
       }
 
       // Next (wrapped)
       if (queue_.size() > 1)
       {
-        size_t next_index = (current_index_ + 1) % queue_.size();
+        size_t next_index = (current_index_mod + 1) % queue_.size();
         desired.insert(next_index);
       }
 

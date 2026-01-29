@@ -20,7 +20,6 @@ AUTO_LOAD = ["online_image"]
 CONF_SOURCE = "source"
 CONF_ADVANCE_INTERVAL = "advance_interval"
 CONF_REFRESH_INTERVAL = "refresh_interval"
-CONF_PLACEHOLDER = "placeholder"
 CONF_IMAGE_SLOTS = "image_slots"
 CONF_IMAGE_SLOT_COUNT = "image_slot_count"
 CONF_ON_ADVANCE = "on_advance"
@@ -50,14 +49,28 @@ EnqueueAction = slideshow_ns.class_("EnqueueAction", automation.Action)
 SuspendAction = slideshow_ns.class_("SuspendAction", automation.Action)
 UnsuspendAction = slideshow_ns.class_("UnsuspendAction", automation.Action)
 
+def validate_image_slot(value):
+    """Validate that the slot is a supported image type."""
+    # Accept online_image, image, or local_image types
+    if HAS_LOCAL_IMAGE:
+        return cv.Any(
+            cv.use_id(online_image.OnlineImage),
+            cv.use_id(image.Image),
+            cv.use_id(local_image.LocalImage), # pyright: ignore[reportPossiblyUnboundVariable]
+        )(value)
+    else:
+        return cv.Any(
+            cv.use_id(online_image.OnlineImage),
+            cv.use_id(image.Image),
+        )(value)
+
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(SlideshowComponent),
 
     cv.Optional(CONF_ADVANCE_INTERVAL): cv.positive_time_period_minutes,
     cv.Optional(CONF_REFRESH_INTERVAL): cv.positive_time_period_minutes,
 
-    cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(cv.use_id(online_image.OnlineImage)),
-    cv.Required(CONF_PLACEHOLDER): cv.use_id(image.Image),
+    cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(validate_image_slot),
     cv.Required(CONF_IMAGE_SLOT_COUNT): cv.positive_int,
 
     cv.Optional(CONF_ON_ADVANCE): automation.validate_automation({
@@ -87,15 +100,10 @@ async def to_code(config):
     cg.add(var.set_refresh_interval(config.get(CONF_REFRESH_INTERVAL, 25)))
     cg.add(var.set_slot_count(config[CONF_IMAGE_SLOT_COUNT]))
 
-    # Add image slots
+    # Add image slots - the overloaded add_image_slot method handles type detection
     for slot_id in config[CONF_IMAGE_SLOTS]:
         slot = await cg.get_variable(slot_id)
-        if HAS_LOCAL_IMAGE and isinstance(slot, local_image.LocalImage): # pyright: ignore[reportPossiblyUnboundVariable]
-             # This calls add_image_slot(local_image::LocalImage *slot)
-            cg.add(var.add_image_slot(slot))
-        else:
-             # This calls add_image_slot(online_image::OnlineImage *slot)
-            cg.add(var.add_image_slot(slot))
+        cg.add(var.add_image_slot(slot))
 
 
     # Setup triggers
@@ -130,7 +138,7 @@ async def to_code(config):
         cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
     }), # pyright: ignore[reportArgumentType]
 )
-async def slideshow_advance_to_code(config, action_id, template_arg, args):
+async def slideshow_advance_to_code(config, action_id, template_arg, _args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)
 
@@ -142,7 +150,7 @@ async def slideshow_advance_to_code(config, action_id, template_arg, args):
         cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
     }), # pyright: ignore[reportArgumentType]
 )
-async def slideshow_previous_to_code(config, action_id, template_arg, args):
+async def slideshow_previous_to_code(config, action_id, template_arg, _args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)
 
@@ -154,7 +162,7 @@ async def slideshow_previous_to_code(config, action_id, template_arg, args):
         cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
     }), # pyright: ignore[reportArgumentType]
 )
-async def slideshow_pause_to_code(config, action_id, template_arg, args):
+async def slideshow_pause_to_code(config, action_id, template_arg, _args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)
 
@@ -166,7 +174,7 @@ async def slideshow_pause_to_code(config, action_id, template_arg, args):
         cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
     }), # pyright: ignore[reportArgumentType]
 )
-async def slideshow_resume_to_code(config, action_id, template_arg, args):
+async def slideshow_resume_to_code(config, action_id, template_arg, _args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)
 
@@ -177,7 +185,7 @@ async def slideshow_resume_to_code(config, action_id, template_arg, args):
         cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
     }), # pyright: ignore[reportArgumentType]
 )
-async def slideshow_refresh_to_code(config, action_id, template_arg, args):
+async def slideshow_refresh_to_code(config, action_id, template_arg, _args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)
 
@@ -208,7 +216,7 @@ async def slideshow_enqueue_to_code(config, action_id, template_arg, args):
         cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
     }), # pyright: ignore[reportArgumentType]
 )
-async def slideshow_suspend_to_code(config, action_id, template_arg, args):
+async def slideshow_suspend_to_code(config, action_id, template_arg, _args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)
 
@@ -219,6 +227,6 @@ async def slideshow_suspend_to_code(config, action_id, template_arg, args):
         cv.Required(CONF_ID): cv.use_id(SlideshowComponent),
     }), # pyright: ignore[reportArgumentType]
 )
-async def slideshow_unsuspend_to_code(config, action_id, template_arg, args):
+async def slideshow_unsuspend_to_code(config, action_id, template_arg, _args):
     paren = await cg.get_variable(config[CONF_ID])
     return cg.new_Pvariable(action_id, template_arg, paren)

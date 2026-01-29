@@ -179,7 +179,6 @@ namespace esphome
       // Queue data
       std::vector<QueueItem> queue_;
       size_t current_index_{0};
-      size_t current_index_mod_{0};
 
       // Image slots
       std::vector<std::unique_ptr<SlideshowSlot>> image_slots_;
