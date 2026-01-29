@@ -17,15 +17,6 @@ namespace esphome
 
     static const char *const TAG = "slideshow";
 
-    SlideshowComponent::~SlideshowComponent()
-    {
-      for (auto *slot : this->image_slots_)
-      {
-        delete slot;
-      }
-      this->image_slots_.clear();
-    }
-
     void SlideshowComponent::setup()
     {
       ESP_LOGCONFIG(TAG, "Setting up slideshow...");
@@ -43,13 +34,23 @@ namespace esphome
         mark_failed();
         return;
       }
-      else
+
+      // Set up scheduled intervals instead of polling
+      if (advance_interval_ > 0)
       {
-        this->i_slots_.resize(slot_count_, nullptr);
-        // for (size_t i = 0; i < slot_count_; i++)
-        // {
-        //   this->i_slots_[i] = new EmbeddedImageSlot(new esphome::image::Image());
-        // }
+        set_interval("advance", advance_interval_ * 60000, [this]()
+                     {
+          if (!paused_ && !queue_.empty()) {
+            advance();
+          } });
+      }
+
+      if (refresh_interval_ > 0)
+      {
+        set_interval("refresh", refresh_interval_ * 60000, [this]()
+                     {
+          ESP_LOGD(TAG, "Triggering refresh...");
+          this->on_refresh_callbacks_.call(0); });
       }
 
       this->on_refresh_callbacks_.call(0);
@@ -68,34 +69,12 @@ namespace esphome
       if (suspended_)
         return;
 
-      // TODO: Schedule intervals properly instead of checking every loop
-
-      // Auto-advance timer
-      if (advance_interval_ > 0 && !paused_ && queue_.size() > 0)
+      // Only reload slots when state has changed (dirty flag optimization)
+      if (slots_dirty_)
       {
-        uint32_t now = millis();
-        if (now - last_advance_ >= advance_interval_ * 60000)
-        {
-          advance();
-          last_advance_ = now;
-        }
+        ensure_slots_loaded_();
+        slots_dirty_ = false;
       }
-
-      // Queue refresh timer
-      if (refresh_interval_ > 0)
-      {
-        uint32_t now = millis();
-        if (now - last_refresh_ >= refresh_interval_ * 60000)
-        {
-          ESP_LOGD(TAG, "Triggering refresh...");
-          // Fire the trigger! Pass current queue size as argument
-          this->on_refresh_callbacks_.call(0);
-          last_refresh_ = now;
-        }
-      }
-
-      // Ensure proper slots are loaded
-      ensure_slots_loaded_();
 
       if (needs_more_photos_)
       {
@@ -105,18 +84,18 @@ namespace esphome
 
     void SlideshowComponent::add_image_slot(online_image::OnlineImage *slot)
     {
-      this->image_slots_.push_back(new OnlineImageSlot(slot));
+      this->image_slots_.push_back(std::unique_ptr<SlideshowSlot>(new OnlineImageSlot(slot)));
     }
     void SlideshowComponent::add_image_slot(esphome::image::Image *slot)
     {
-      this->image_slots_.push_back(new EmbeddedImageSlot(slot));
+      this->image_slots_.push_back(std::unique_ptr<SlideshowSlot>(new EmbeddedImageSlot(slot)));
     }
 
 // Guarded implementation for LocalImage
 #ifdef USE_LOCAL_IMAGE
     void SlideshowComponent::add_image_slot(local_image::LocalImage *slot)
     {
-      this->image_slots_.push_back(new LocalImageSlot(slot));
+      this->image_slots_.push_back(std::unique_ptr<SlideshowSlot>(new LocalImageSlot(slot)));
     }
 #endif
 
@@ -143,8 +122,8 @@ namespace esphome
         needs_more_photos_ = true;
       }
 
-      // Trigger slots reload (will prefetch next)
-      // ensure_slots_loaded_();
+      // Mark slots as needing reload
+      slots_dirty_ = true;
     }
 
     void SlideshowComponent::previous()
@@ -170,6 +149,9 @@ namespace esphome
                current_index_, queue_.size(), queue_[current_index_mod_].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
+
+      // Mark slots as needing reload
+      slots_dirty_ = true;
     }
 
     void SlideshowComponent::pause()
@@ -212,6 +194,9 @@ namespace esphome
                current_index_, queue_[current_index_mod_].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
+
+      // Mark slots as needing reload
+      slots_dirty_ = true;
     }
 
     void SlideshowComponent::enqueue(const std::vector<std::string> &items)
@@ -230,6 +215,9 @@ namespace esphome
 
       // Notify listeners
       on_queue_updated_callbacks_.call(queue_.size());
+
+      // Mark slots as needing reload
+      slots_dirty_ = true;
     }
 
     SlideshowSlot *SlideshowComponent::get_current_image()
@@ -238,7 +226,7 @@ namespace esphome
       if (it != loaded_images_.end())
       {
         size_t slot_idx = it->second;
-        auto *img = image_slots_[slot_idx];
+        auto *img = image_slots_[slot_idx].get();
 
         // Only return if image is actually loaded (width > 0)
         if (img->is_ready())
@@ -253,7 +241,7 @@ namespace esphome
     {
       if (slot_index < image_slots_.size())
       {
-        return image_slots_[slot_index];
+        return image_slots_[slot_index].get();
       }
       return nullptr;
     }
@@ -340,7 +328,9 @@ namespace esphome
       }
 
       on_queue_updated_callbacks_.call(queue_.size());
-      // ensure_slots_loaded_();
+
+      // Mark slots as needing reload
+      slots_dirty_ = true;
     }
 
     void SlideshowComponent::ensure_slots_loaded_()
@@ -450,7 +440,7 @@ namespace esphome
         return;
       }
 
-      auto *img = image_slots_[slot_index];
+      auto *img = image_slots_[slot_index].get();
       if (img->is_ready())
       {
         ESP_LOGD(TAG, "Calling release() on slot %d", slot_index);
@@ -465,7 +455,7 @@ namespace esphome
       if (queue_index >= queue_.size() || slot_index >= image_slots_.size())
         return;
 
-      auto *slot = image_slots_[slot_index];
+      auto *slot = image_slots_[slot_index].get();
       const QueueItem &item = queue_[queue_index];
 
       ESP_LOGI(TAG, "Loading source '%s' into slot %d", item.source.c_str(), slot_index);
@@ -475,12 +465,20 @@ namespace esphome
 
       slot->set_source(item.source);
       slot->update();
+
+      // Use weak callback to avoid dangling references
       slot->callback_once([this, slot_index](bool success)
                           {
+        // Check if slot is still valid/loading before processing callback
+        if (this->loading_slots_.find(slot_index) == this->loading_slots_.end()) {
+          ESP_LOGD(TAG, "Ignoring callback for released slot %d", slot_index);
+          return;
+        }
+
         if (success) {
-        this->on_image_ready(slot_index);
+          this->on_image_ready(slot_index);
         } else {
-        this->on_image_error(slot_index);
+          this->on_image_error(slot_index);
         } });
     }
 

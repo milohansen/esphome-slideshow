@@ -10,6 +10,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <memory>
 
 namespace esphome
 {
@@ -85,7 +86,6 @@ namespace esphome
     class SlideshowComponent : public Component
     {
     public:
-      ~SlideshowComponent();
       void setup() override;
       void loop() override;
       void dump_config() override;
@@ -171,6 +171,7 @@ namespace esphome
       bool suspended_{false};
 
       bool needs_more_photos_{false};
+      bool slots_dirty_{true}; // Flag to track if slots need reloading
 
       // The Builder Lambda
       queue_builder_t queue_builder_;
@@ -181,9 +182,8 @@ namespace esphome
       size_t current_index_mod_{0};
 
       // Image slots
-      std::vector<SlideshowSlot *> image_slots_;
+      std::vector<std::unique_ptr<SlideshowSlot>> image_slots_;
       size_t slot_count_{0};
-      std::vector<SlideshowSlot *> i_slots_;
 
       // Mapping: queue_index -> slot_index
       std::map<size_t, size_t> loaded_images_;
