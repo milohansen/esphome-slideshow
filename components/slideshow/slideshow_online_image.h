@@ -58,7 +58,7 @@ namespace esphome
       }
 
     protected:
-      online_image::OnlineImage *img_;
+      online_image::OnlineImage *img_; // non-owning observer
       bool ready_{false};
       bool failed_{false};
     };

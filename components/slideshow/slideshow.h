@@ -20,24 +20,26 @@ namespace esphome
     {
     public:
       /// Add a callback to the list.
-      void add(std::function<void(bool)> &&callback) { this->callbacks_.push_back(std::move(callback)); }
+      void add(std::function<void(bool)> callback) { callbacks_.push_back(std::move(callback)); }
 
       /// Call all callbacks in this manager.
       void call(bool arg)
       {
-        std::vector<std::function<void(bool)>> current_callbacks = std::move(this->callbacks_);
-        this->callbacks_.clear();
+        auto callbacks = std::move(callbacks_);
+        callbacks_.clear();
 
-        for (auto &cb : current_callbacks)
+        for (auto &cb : callbacks)
         {
           cb(arg);
         }
       }
-      size_t size() const { return this->callbacks_.size(); }
+      size_t size() const { return callbacks_.size(); }
+
+      bool empty() const { return callbacks_.empty(); }
 
       void clear()
       {
-        this->callbacks_.clear();
+        callbacks_.clear();
       }
 
     protected:
@@ -72,7 +74,6 @@ namespace esphome
       }
 
     protected:
-      // OnceCallbackManager<void(bool)> callbacks_;
       OnceCallbackManager callbacks_;
     };
 
@@ -324,13 +325,14 @@ namespace esphome
       SlideshowComponent *parent_;
       std::vector<std::string> items_;
     };
-    
+
     template <typename... Ts>
     class SuspendAction : public Action<Ts...>
     {
     public:
       explicit SuspendAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
       void play(const Ts &...x) override { this->slideshow_->suspend(true); }
+
     protected:
       SlideshowComponent *slideshow_;
     };
@@ -340,6 +342,7 @@ namespace esphome
     public:
       explicit UnsuspendAction(SlideshowComponent *slideshow) : slideshow_(slideshow) {}
       void play(const Ts &...x) override { this->slideshow_->suspend(false); }
+
     protected:
       SlideshowComponent *slideshow_;
     };

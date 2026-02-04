@@ -16,7 +16,7 @@ namespace esphome
       void set_source(const std::string &source) override
       {
         // Translate the generic source into what local_image expects
-        ESP_LOGE("slideshow", "EmbeddedImageSlot does not support set_source with string. Source: %s", source.c_str());
+        ESP_LOGW("slideshow", "EmbeddedImageSlot does not support set_source with string. Source: %s", source.c_str());
       }
 
       void update() override
@@ -26,7 +26,7 @@ namespace esphome
 
       void release() override
       {
-        ESP_LOGI("slideshow", "EmbeddedImageSlot does not support release. Image cannot be released.");
+        ESP_LOGW("slideshow", "EmbeddedImageSlot does not support release. Image cannot be released.");
       }
 
       esphome::image::Image *get_image() override
