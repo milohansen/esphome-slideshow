@@ -98,7 +98,7 @@ async def to_code(config):
     # Configuration with defaults
     cg.add(var.set_advance_interval(config.get(CONF_ADVANCE_INTERVAL, 5)))
     cg.add(var.set_refresh_interval(config.get(CONF_REFRESH_INTERVAL, 25)))
-    cg.add(var.set_slot_count(config[CONF_IMAGE_SLOT_COUNT]))
+    # cg.add(var.set_slot_count(config[CONF_IMAGE_SLOT_COUNT]))
     cg.add(var.set_pair_layout(config.get(CONF_PAIR_LAYOUT, False)))
 
     # Add image slots - the overloaded add_image_slot method handles type detection

@@ -131,7 +131,6 @@ slideshow:
     - slide_slot_0
     - slide_slot_1
     - slide_slot_2
-  image_slot_count: 3
 
   on_advance:
     - lambda: |-
