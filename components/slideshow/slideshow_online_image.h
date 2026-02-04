@@ -19,13 +19,8 @@ namespace esphome
     public:
       explicit OnlineImageSlot(esphome::online_image::OnlineImage *img) : img_(img)
       {
-        if (!img_) {
-          ESP_LOGE("slideshow", "OnlineImageSlot: null image pointer");
-          return;
-        }
         this->img_->add_on_finished_callback([this](bool cached)
                                              {
-                                              ESP_LOGI("slideshow", "Image finished with cached: %s", cached ? "true" : "false");
                                               this->callbacks_.call(true);
                                               this->ready_ = true;
                                               this->failed_ = false; });

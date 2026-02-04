@@ -12,7 +12,6 @@
 #include <set>
 #include <memory>
 #include <algorithm>
-#include <cctype>
 
 namespace esphome
 {
@@ -34,14 +33,6 @@ namespace esphome
         {
           cb(arg);
         }
-      }
-      size_t size() const { return callbacks_.size(); }
-
-      bool empty() const { return callbacks_.empty(); }
-
-      void clear()
-      {
-        callbacks_.clear();
       }
 
     protected:
@@ -95,31 +86,9 @@ namespace esphome
       [[nodiscard]] bool is_paired() const { 
         return !source_right.empty(); 
       }
-      
-      // Helper to get slot requirement
-      [[nodiscard]] size_t slot_count() const {
-        return is_paired() ? 2 : 1;
-      }
-    };
-    struct SlotItem
-    {
-      size_t slot_left = SIZE_MAX;
-      bool is_left_loaded = false;
-      size_t slot_right = SIZE_MAX;
-      bool is_right_loaded = false;
-      
-      // Helper to determine if this item is a pair
-      [[nodiscard]] bool is_paired() const { 
-        return slot_right != SIZE_MAX; 
-      }
-      
-      // Helper to get slot requirement
-      [[nodiscard]] size_t slot_count() const {
-        return is_paired() ? 2 : 1;
-      }
     };
 
-    using queue_builder_t = std::function<std::vector<std::string>()>;
+
 
     enum class ImagePosition
     {
@@ -156,8 +125,6 @@ namespace esphome
       void set_slot_count(size_t count) { slot_count_ = count; }
       void set_pair_layout(bool enabled) { pair_layout_ = enabled; }
 
-      void set_queue_builder(queue_builder_t &&builder) { queue_builder_ = builder; }
-
       void add_image_slot(online_image::OnlineImage *slot);
       void add_image_slot(esphome::image::Image *slot);
 #ifdef USE_LOCAL_IMAGE
@@ -181,12 +148,6 @@ namespace esphome
       [[nodiscard]] size_t current_index() const { return current_index_; }
       [[nodiscard]] bool is_paused() const { return paused_; }
       [[nodiscard]] size_t queue_size() const { return queue_.size(); }
-      SlideshowSlot *get_current_image();
-      SlideshowSlot *get_slot(size_t slot_index);
-      
-      // Paired mode accessors
-      SlideshowSlot *get_current_right_image();
-      [[nodiscard]] bool is_current_paired() const;
       [[nodiscard]] bool is_pair_layout() const { return pair_layout_; }
 
       void enqueue(const std::vector<std::string> &items);
@@ -219,15 +180,11 @@ namespace esphome
       }
 
     protected:
-      // Queue management
-      void update_queue_from_builder_();
-
       // Slot management
       void ensure_slots_loaded_();
       [[nodiscard]] size_t find_free_slot_();
       void release_slot_(std::pair<size_t, size_t> pair);
       void release_slot_(size_t slot_index);
-      void load_image_to_slot_(size_t queue_index, size_t slot_index);
       void load_image_to_slot_(size_t slot_index, const std::string &source, ImagePosition position = ImagePosition::SINGLE);
       [[nodiscard]] bool is_slot_loading_(size_t slot_index) const;
       
@@ -256,9 +213,6 @@ namespace esphome
       bool needs_more_photos_{false};
       bool slots_dirty_{true}; // Flag to track if slots need reloading
 
-      // The Builder Lambda
-      queue_builder_t queue_builder_;
-
       // Queue data
       std::vector<QueueItem> queue_;
       size_t current_index_{0};
@@ -269,13 +223,8 @@ namespace esphome
 
       // Mapping: queue_index -> slot_index (for single images)
       std::map<size_t, std::pair<size_t, size_t>> loaded_images_;
-      std::set<size_t> loading_images_;
       // Mapping: slot_index -> loading count
       std::map<size_t, size_t> loading_slots_;
-
-      // Timing
-      uint32_t last_advance_{0};
-      uint32_t last_refresh_{0};
 
       // Callbacks
       CallbackManager<void(size_t)> on_advance_callbacks_;

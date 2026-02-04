@@ -18,12 +18,7 @@ namespace esphome
     class EmbeddedImageSlot : public SlideshowSlot
     {
     public:
-      explicit EmbeddedImageSlot(esphome::image::Image *img) : img_(img) 
-      {
-        if (!img_) {
-          ESP_LOGE("slideshow", "EmbeddedImageSlot: null image pointer");
-        }
-      }
+      explicit EmbeddedImageSlot(esphome::image::Image *img) : img_(img) {}
       
       // Delete copy operations
       EmbeddedImageSlot(const EmbeddedImageSlot&) = delete;
