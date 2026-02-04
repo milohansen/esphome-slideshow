@@ -107,17 +107,16 @@ namespace esphome
         return;
       }
 
-      current_index_++;
-      size_t current_index_mod = current_index_ % queue_.size();
+      current_index_ = advance_index(current_index_, queue_.size());
 
       ESP_LOGD(TAG, "Advanced to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_mod].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_].source.c_str());
 
       // Fire callback
       on_advance_callbacks_.call(current_index_);
 
-      // Check if we're near the end using modulo index to avoid overflow
-      if (current_index_mod + 2 >= queue_.size())
+      // Check if we're near the end
+      if (current_index_ + 2 >= queue_.size())
       {
         needs_more_photos_ = true;
       }
@@ -134,19 +133,10 @@ namespace esphome
         return;
       }
 
-      // Prevent underflow when current_index_ is 0
-      if (current_index_ == 0)
-      {
-        current_index_ = queue_.size() - 1;
-      }
-      else
-      {
-        current_index_--;
-      }
-      size_t current_index_mod = current_index_ % queue_.size();
+      current_index_ = retreat_index(current_index_, queue_.size());
 
       ESP_LOGD(TAG, "Went back to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_mod].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
 
@@ -195,10 +185,9 @@ namespace esphome
       }
 
       current_index_ = index;
-      size_t current_index_mod = current_index_ % queue_.size();
 
       ESP_LOGI(TAG, "Jumped to index %d (ID: %s)",
-               current_index_, queue_[current_index_mod].source.c_str());
+               current_index_, queue_[current_index_].source.c_str());
 
       on_advance_callbacks_.call(current_index_);
 
@@ -217,7 +206,8 @@ namespace esphome
       for (const auto &str : items)
       {
         // Validate: skip empty strings or strings that are just whitespace
-        if (str.empty() || str.find_first_not_of(" \t\n\r") == std::string::npos)
+        auto is_whitespace = [](unsigned char c) { return std::isspace(c); };
+        if (str.empty() || std::all_of(str.begin(), str.end(), is_whitespace))
         {
           ESP_LOGW(TAG, "Skipping empty or whitespace-only item");
           continue;
@@ -248,9 +238,9 @@ namespace esphome
       current_index_ = 0;
 
       // Release all loaded slots
-      for (const auto &pair : loaded_images_)
+      for (const auto &[queue_idx, slot_idx] : loaded_images_)
       {
-        release_slot_(pair.second);
+        release_slot_(slot_idx);
       }
       loaded_images_.clear();
       loading_slots_.clear();
@@ -267,8 +257,7 @@ namespace esphome
         return nullptr;
 
       size_t current_index_mod = current_index_ % queue_.size();
-      auto it = loaded_images_.find(current_index_mod);
-      if (it != loaded_images_.end())
+      if (auto it = loaded_images_.find(current_index_mod); it != loaded_images_.end())
       {
         size_t slot_idx = it->second;
         auto *img = image_slots_[slot_idx].get();
@@ -299,15 +288,15 @@ namespace esphome
       loading_slots_.erase(slot_index);
 
       // Find which queue index this slot corresponds to
-      for (const auto &pair : loaded_images_)
+      for (const auto &[queue_idx, slot_idx] : loaded_images_)
       {
-        if (pair.second == slot_index)
+        if (slot_idx == slot_index)
         {
           ESP_LOGI(TAG, "Loaded image %s (queue index %d)",
-                   queue_[pair.first].source.c_str(), pair.first);
+                   queue_[queue_idx].source.c_str(), queue_idx);
 
           // Fire callback
-          on_image_ready_callbacks_.call(pair.first, false);
+          on_image_ready_callbacks_.call(queue_idx, false);
           break;
         }
       }
@@ -321,15 +310,15 @@ namespace esphome
       loading_slots_.erase(slot_index);
 
       // Find which queue index failed
-      for (const auto &pair : loaded_images_)
+      for (const auto &[queue_idx, slot_idx] : loaded_images_)
       {
-        if (pair.second == slot_index)
+        if (slot_idx == slot_index)
         {
-          std::string error = "Failed to load image: " + queue_[pair.first].source;
+          std::string error = "Failed to load image: " + queue_[queue_idx].source;
           on_error_callbacks_.call(error);
 
           // Clear the mapping so we can retry
-          loaded_images_.erase(pair.first);
+          loaded_images_.erase(queue_idx);
           break;
         }
       }
@@ -412,8 +401,7 @@ namespace esphome
       auto it = loaded_images_.begin();
       while (it != loaded_images_.end())
       {
-        size_t queue_idx = it->first;
-        size_t slot_idx = it->second;
+        const auto &[queue_idx, slot_idx] = *it;
 
         if (desired.find(queue_idx) == desired.end())
         {
@@ -457,9 +445,9 @@ namespace esphome
         size_t mod_i = (i + current_index_) % image_slots_.size();
         // Check if slot is mapped to a queue index
         bool in_use = false;
-        for (const auto &pair : loaded_images_)
+        for (const auto &[queue_idx, slot_idx] : loaded_images_)
         {
-          if (pair.second == mod_i)
+          if (slot_idx == mod_i)
           {
             in_use = true;
             break;
@@ -530,10 +518,43 @@ namespace esphome
         } });
     }
 
-    bool SlideshowComponent::is_slot_loading_(size_t slot_index)
+    bool SlideshowComponent::is_slot_loading_(size_t slot_index) const
     {
       return loading_slots_.find(slot_index) != loading_slots_.end();
     }
+
+#ifndef NDEBUG
+    bool SlideshowComponent::check_slot_invariants_() const
+    {
+      // No slot should be both loaded and loading
+      for (const auto &[queue_idx, slot_idx] : loaded_images_)
+      {
+        if (loading_slots_.count(slot_idx) > 0)
+        {
+          ESP_LOGE(TAG, "Invariant violation: slot %d is both loaded and loading", slot_idx);
+          return false;
+        }
+        // All slot indices must be valid
+        if (slot_idx >= image_slots_.size())
+        {
+          ESP_LOGE(TAG, "Invariant violation: invalid slot index %d (max: %d)", slot_idx, image_slots_.size());
+          return false;
+        }
+      }
+      
+      // All loading slot indices must be valid
+      for (size_t slot_idx : loading_slots_)
+      {
+        if (slot_idx >= image_slots_.size())
+        {
+          ESP_LOGE(TAG, "Invariant violation: invalid loading slot index %d (max: %d)", slot_idx, image_slots_.size());
+          return false;
+        }
+      }
+      
+      return true;
+    }
+#endif
 
   } // namespace slideshow
 } // namespace esphome

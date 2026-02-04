@@ -9,11 +9,20 @@ namespace esphome
 {
   namespace slideshow
   {
+    /**
+     * @brief Adapter for online images that can be downloaded from URLs.
+     * 
+     * @note This class does not own the image pointer - it's a non-owning observer.
+     */
     class OnlineImageSlot : public SlideshowSlot
     {
     public:
-      OnlineImageSlot(esphome::online_image::OnlineImage *img) : img_(img)
+      explicit OnlineImageSlot(esphome::online_image::OnlineImage *img) : img_(img)
       {
+        if (!img_) {
+          ESP_LOGE("slideshow", "OnlineImageSlot: null image pointer");
+          return;
+        }
         this->img_->add_on_finished_callback([this](bool cached)
                                              {
                                               ESP_LOGI("slideshow", "Image finished with cached: %s", cached ? "true" : "false");
@@ -26,6 +35,10 @@ namespace esphome
                                             this->ready_ = false;
                                             this->failed_ = true; });
       }
+      
+      // Delete copy operations
+      OnlineImageSlot(const OnlineImageSlot&) = delete;
+      OnlineImageSlot& operator=(const OnlineImageSlot&) = delete;
 
       void set_source(const std::string &source) override
       {
@@ -42,23 +55,23 @@ namespace esphome
         this->img_->release();
       }
 
-      esphome::image::Image *get_image() override
+      [[nodiscard]] esphome::image::Image *get_image() const override
       {
         return this->img_;
       }
 
-      bool is_ready() override
+      [[nodiscard]] bool is_ready() const override
       {
         return this->ready_;
       }
 
-      bool is_failed() override
+      [[nodiscard]] bool is_failed() const override
       {
         return this->failed_;
       }
 
     protected:
-      online_image::OnlineImage *img_; // non-owning observer
+      esphome::online_image::OnlineImage *img_; // non-owning observer
       bool ready_{false};
       bool failed_{false};
     };

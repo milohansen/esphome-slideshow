@@ -11,6 +11,8 @@
 #include <map>
 #include <set>
 #include <memory>
+#include <algorithm>
+#include <cctype>
 
 namespace esphome
 {
@@ -46,27 +48,34 @@ namespace esphome
       std::vector<std::function<void(bool)>> callbacks_;
     };
 
-    // Abstract interface for any slot (Online, Local, Generated)
+    /**
+     * @brief Abstract interface for any slot (Online, Local, Embedded).
+     * 
+     * Represents an image that can be loaded from various sources.
+     * Implementations must handle their specific image lifecycle.
+     * 
+     * @note Implementations should be move-only to prevent lifetime issues.
+     */
     class SlideshowSlot
     {
     public:
       virtual ~SlideshowSlot() = default;
 
-      // The slideshow calls this to load new content
+      /// The slideshow calls this to load new content
       virtual void set_source(const std::string &source) = 0;
 
-      // Trigger the loading process (download or file read)
+      /// Trigger the loading process (download or file read)
       virtual void update() = 0;
 
-      // Release memory if possible
+      /// Release memory if possible
       virtual void release() = 0;
 
-      // Return the underlying generic Image for the Display component
-      virtual esphome::image::Image *get_image() = 0;
+      /// Return the underlying generic Image for the Display component
+      [[nodiscard]] virtual esphome::image::Image *get_image() const = 0;
 
-      // Status check
-      virtual bool is_ready() = 0;
-      virtual bool is_failed() = 0;
+      /// Status check
+      [[nodiscard]] virtual bool is_ready() const = 0;
+      [[nodiscard]] virtual bool is_failed() const = 0;
 
       void callback_once(std::function<void(bool)> &&cb)
       {
@@ -84,13 +93,27 @@ namespace esphome
 
     using queue_builder_t = std::function<std::vector<std::string>()>;
 
+    /**
+     * @brief Main slideshow component that manages image display rotation.
+     * 
+     * Coordinates loading, caching, and display of images from various sources.
+     * Maintains a queue of images and manages a pool of reusable image slots.
+     * 
+     * @invariant loaded_images_ and loading_slots_ are disjoint sets
+     * @invariant All slot indices in both maps are < image_slots_.size()
+     * @invariant current_index_ is bounded by queue_.size() when used (modulo operation)
+     * 
+     * @thread_safety Not thread-safe. Must be called from ESPHome main thread.
+     */
     class SlideshowComponent : public Component
     {
     public:
+      static constexpr size_t INVALID_SLOT = SIZE_MAX;
+      
       void setup() override;
       void loop() override;
       void dump_config() override;
-      float get_setup_priority() const override { return setup_priority::LATE; }
+      [[nodiscard]] float get_setup_priority() const override { return setup_priority::LATE; }
 
       // Configuration
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
@@ -119,9 +142,9 @@ namespace esphome
       }
 
       // State queries
-      size_t current_index() const { return current_index_; }
-      bool is_paused() const { return paused_; }
-      size_t queue_size() const { return queue_.size(); }
+      [[nodiscard]] size_t current_index() const { return current_index_; }
+      [[nodiscard]] bool is_paused() const { return paused_; }
+      [[nodiscard]] size_t queue_size() const { return queue_.size(); }
       SlideshowSlot *get_current_image();
       SlideshowSlot *get_slot(size_t slot_index);
 
@@ -160,10 +183,24 @@ namespace esphome
 
       // Slot management
       void ensure_slots_loaded_();
-      size_t find_free_slot_();
+      [[nodiscard]] size_t find_free_slot_();
       void release_slot_(size_t slot_index);
       void load_image_to_slot_(size_t queue_index, size_t slot_index);
-      bool is_slot_loading_(size_t slot_index);
+      [[nodiscard]] bool is_slot_loading_(size_t slot_index) const;
+      
+      // Index manipulation helpers
+      [[nodiscard]] size_t advance_index(size_t current, size_t queue_size) const {
+        return queue_size > 0 ? (current + 1) % queue_size : 0;
+      }
+      
+      [[nodiscard]] size_t retreat_index(size_t current, size_t queue_size) const {
+        return queue_size > 0 ? (current + queue_size - 1) % queue_size : 0;
+      }
+      
+#ifndef NDEBUG
+      /// Validates internal invariants (debug builds only)
+      [[nodiscard]] bool check_slot_invariants_() const;
+#endif
 
       // State
       uint32_t advance_interval_{5};
