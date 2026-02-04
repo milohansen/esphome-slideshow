@@ -21,7 +21,6 @@ CONF_SOURCE = "source"
 CONF_ADVANCE_INTERVAL = "advance_interval"
 CONF_REFRESH_INTERVAL = "refresh_interval"
 CONF_IMAGE_SLOTS = "image_slots"
-CONF_IMAGE_SLOT_COUNT = "image_slot_count"
 CONF_PAIR_LAYOUT = "pair_layout"
 CONF_ON_ADVANCE = "on_advance"
 CONF_ON_IMAGE_READY = "on_image_ready"
@@ -73,7 +72,6 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_PAIR_LAYOUT): cv.boolean,
 
     cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(validate_image_slot),
-    cv.Required(CONF_IMAGE_SLOT_COUNT): cv.positive_int,
 
     cv.Optional(CONF_ON_ADVANCE): automation.validate_automation({
         cv.GenerateID(automation.CONF_TRIGGER_ID): cv.declare_id(OnAdvanceTrigger),

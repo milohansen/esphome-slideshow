@@ -39,13 +39,6 @@ namespace esphome
         return;
       }
 
-      if (slot_count_ == 0)
-      {
-        ESP_LOGE(TAG, "Slot count must be greater than zero!");
-        mark_failed();
-        return;
-      }
-
       if (advance_interval_ > 0)
       {
         set_interval("advance", advance_interval_ * 60000, [this]()

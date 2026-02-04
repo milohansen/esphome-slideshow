@@ -122,7 +122,6 @@ namespace esphome
       // Configuration
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
       void set_refresh_interval(uint32_t ms) { refresh_interval_ = ms; }
-      void set_slot_count(size_t count) { slot_count_ = count; }
       void set_pair_layout(bool enabled) { pair_layout_ = enabled; }
 
       void add_image_slot(online_image::OnlineImage *slot);
@@ -219,7 +218,6 @@ namespace esphome
 
       // Image slots
       std::vector<std::unique_ptr<SlideshowSlot>> image_slots_;
-      size_t slot_count_{0};
 
       // Mapping: queue_index -> slot_index (for single images)
       std::map<size_t, std::pair<size_t, size_t>> loaded_images_;
