@@ -17,6 +17,19 @@ namespace esphome
 
     static const char *const TAG = "slideshow";
 
+    // Helper function to trim whitespace
+    static void trim(std::string &s)
+    {
+      auto is_whitespace = [](unsigned char c)
+      { return std::isspace(c); };
+      s.erase(s.begin(), std::find_if(s.begin(), s.end(), [&](unsigned char c)
+                                      { return !is_whitespace(c); }));
+      s.erase(std::find_if(s.rbegin(), s.rend(), [&](unsigned char c)
+                           { return !is_whitespace(c); })
+                  .base(),
+              s.end());
+    }
+
     void SlideshowComponent::setup()
     {
       ESP_LOGCONFIG(TAG, "Setting up slideshow...");
@@ -110,7 +123,7 @@ namespace esphome
       current_index_ = advance_index(current_index_, queue_.size());
 
       ESP_LOGD(TAG, "Advanced to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_].source_left.c_str());
 
       // Fire callback
       on_advance_callbacks_.call(current_index_);
@@ -136,7 +149,7 @@ namespace esphome
       current_index_ = retreat_index(current_index_, queue_.size());
 
       ESP_LOGD(TAG, "Went back to index %d/%d (ID: %s)",
-               current_index_, queue_.size(), queue_[current_index_].source.c_str());
+               current_index_, queue_.size(), queue_[current_index_].source_left.c_str());
 
       on_advance_callbacks_.call(current_index_);
 
@@ -187,7 +200,7 @@ namespace esphome
       current_index_ = index;
 
       ESP_LOGI(TAG, "Jumped to index %d (ID: %s)",
-               current_index_, queue_[current_index_].source.c_str());
+               current_index_, queue_[current_index_].source_left.c_str());
 
       on_advance_callbacks_.call(current_index_);
 
@@ -206,7 +219,8 @@ namespace esphome
       for (const auto &str : items)
       {
         // Validate: skip empty strings or strings that are just whitespace
-        auto is_whitespace = [](unsigned char c) { return std::isspace(c); };
+        auto is_whitespace = [](unsigned char c)
+        { return std::isspace(c); };
         if (str.empty() || std::all_of(str.begin(), str.end(), is_whitespace))
         {
           ESP_LOGW(TAG, "Skipping empty or whitespace-only item");
@@ -214,7 +228,34 @@ namespace esphome
         }
 
         QueueItem item;
-        item.source = str; // Store the URL (or "URL|COLOR" string)
+        size_t delimiter_pos = str.find('|');
+
+        if (pair_layout_ && delimiter_pos != std::string::npos)
+        {
+          // Paired item: "url1|url2"
+          item.source_left = str.substr(0, delimiter_pos);
+          item.source_right = str.substr(delimiter_pos + 1);
+          trim(item.source_left);
+          trim(item.source_right);
+
+          if (item.source_right.empty())
+          {
+            ESP_LOGW(TAG, "Empty right URL in pair, treating as single: %s",
+                     item.source_left.c_str());
+          }
+        }
+        else
+        {
+          // Single item: "url" (or pair mode disabled, or no delimiter found)
+          item.source_left = str;
+          item.source_right = ""; // Empty = single
+        }
+
+        if (!pair_layout_ && delimiter_pos != std::string::npos)
+        {
+          ESP_LOGW(TAG, "Found '|' delimiter but pair_layout is disabled, treating as single");
+        }
+
         queue_.push_back(item);
         valid_count++;
       }
@@ -237,12 +278,21 @@ namespace esphome
       queue_.clear();
       current_index_ = 0;
 
-      // Release all loaded slots
+      // Release all loaded slots (singles)
       for (const auto &[queue_idx, slot_idx] : loaded_images_)
       {
         release_slot_(slot_idx);
       }
       loaded_images_.clear();
+
+      // Release all loaded slots (pairs)
+      for (const auto &[queue_idx, slot_pair] : loaded_image_pairs_)
+      {
+        release_slot_(slot_pair.first);  // Left
+        release_slot_(slot_pair.second); // Right
+      }
+      loaded_image_pairs_.clear();
+
       loading_slots_.clear();
 
       needs_more_photos_ = false;
@@ -251,26 +301,52 @@ namespace esphome
       on_queue_updated_callbacks_.call(0);
     }
 
+    // Not used
     SlideshowSlot *SlideshowComponent::get_current_image()
     {
       if (queue_.empty())
         return nullptr;
 
       size_t current_index_mod = current_index_ % queue_.size();
-      if (auto it = loaded_images_.find(current_index_mod); it != loaded_images_.end())
-      {
-        size_t slot_idx = it->second;
-        auto *img = image_slots_[slot_idx].get();
 
-        // Only return if image is actually loaded (width > 0)
-        if (img->is_ready())
+      if (pair_layout_)
+      {
+        // Check if it's a loaded pair
+        auto it_pair = loaded_image_pairs_.find(current_index_mod);
+        if (it_pair != loaded_image_pairs_.end())
         {
-          return img;
+          auto *slot = image_slots_[it_pair->second.first].get();
+          return (slot && slot->is_ready()) ? slot : nullptr;
+        }
+
+        // Check if it's a loaded single
+        auto it_single = loaded_images_.find(current_index_mod);
+        if (it_single != loaded_images_.end())
+        {
+          auto *slot = image_slots_[it_single->second].get();
+          return (slot && slot->is_ready()) ? slot : nullptr;
         }
       }
+      else
+      {
+        // Original single mode logic
+        if (auto it = loaded_images_.find(current_index_mod); it != loaded_images_.end())
+        {
+          size_t slot_idx = it->second;
+          auto *img = image_slots_[slot_idx].get();
+
+          // Only return if image is actually loaded (width > 0)
+          if (img->is_ready())
+          {
+            return img;
+          }
+        }
+      }
+
       return nullptr;
     }
 
+    // Not used
     SlideshowSlot *SlideshowComponent::get_slot(size_t slot_index)
     {
       if (slot_index < image_slots_.size())
@@ -280,24 +356,90 @@ namespace esphome
       return nullptr;
     }
 
+    // Not used
+    SlideshowSlot *SlideshowComponent::get_current_right_image()
+    {
+      if (!pair_layout_ || queue_.empty())
+        return nullptr;
+
+      size_t curr_idx = current_index_ % queue_.size();
+      auto it = loaded_image_pairs_.find(curr_idx);
+
+      if (it != loaded_image_pairs_.end())
+      {
+        auto *slot = image_slots_[it->second.second].get();
+        return (slot && slot->is_ready()) ? slot : nullptr;
+      }
+
+      return nullptr; // Current item is not a pair
+    }
+
+    // Not used
+    bool SlideshowComponent::is_current_paired() const
+    {
+      if (!pair_layout_ || queue_.empty())
+        return false;
+
+      size_t curr_idx = current_index_ % queue_.size();
+      return queue_[curr_idx].is_paired();
+    }
+
     void SlideshowComponent::on_image_ready(size_t slot_index)
     {
       ESP_LOGD(TAG, "Image ready in slot %d", slot_index);
 
       // Remove from loading set
+      // FIXME: don't erase here yet - may be part of a pair
       loading_slots_.erase(slot_index);
 
-      // Find which queue index this slot corresponds to
-      for (const auto &[queue_idx, slot_idx] : loaded_images_)
+      if (pair_layout_)
       {
-        if (slot_idx == slot_index)
+        // Check if this slot belongs to a pair
+        for (const auto &[queue_idx, slot_pair] : loaded_image_pairs_)
         {
-          ESP_LOGI(TAG, "Loaded image %s (queue index %d)",
-                   queue_[queue_idx].source.c_str(), queue_idx);
+          if (slot_pair.first == slot_index)
+          {
+            // Left side of pair
+            ESP_LOGI(TAG, "Loaded left image: %s (queue index %d)",
+                     queue_[queue_idx].source_left.c_str(), queue_idx);
+            on_image_ready_callbacks_.call(queue_idx, true, true);
+            return;
+          }
+          if (slot_pair.second == slot_index)
+          {
+            // Right side of pair
+            ESP_LOGI(TAG, "Loaded right image: %s (queue index %d)",
+                     queue_[queue_idx].source_right.c_str(), queue_idx);
+            on_image_ready_callbacks_.call(queue_idx, false, true);
+            return;
+          }
+        }
 
-          // Fire callback
-          on_image_ready_callbacks_.call(queue_idx, false);
-          break;
+        // Check if this slot belongs to a single
+        for (const auto &[queue_idx, slot_idx] : loaded_images_)
+        {
+          if (slot_idx == slot_index)
+          {
+            // Single image in paired mode
+            ESP_LOGI(TAG, "Loaded single image: %s (queue index %d)",
+                     queue_[queue_idx].source_left.c_str(), queue_idx);
+            on_image_ready_callbacks_.call(queue_idx, true, false);
+            return;
+          }
+        }
+      }
+      else
+      {
+        // Original single mode
+        for (const auto &[queue_idx, slot_idx] : loaded_images_)
+        {
+          if (slot_idx == slot_index)
+          {
+            ESP_LOGI(TAG, "Loaded image %s (queue index %d)",
+                     queue_[queue_idx].source_left.c_str(), queue_idx);
+            on_image_ready_callbacks_.call(queue_idx, true, false);
+            return;
+          }
         }
       }
     }
@@ -309,17 +451,50 @@ namespace esphome
       // Remove from loading set
       loading_slots_.erase(slot_index);
 
-      // Find which queue index failed
-      for (const auto &[queue_idx, slot_idx] : loaded_images_)
+      if (pair_layout_)
       {
-        if (slot_idx == slot_index)
+        // Check if this slot belongs to a pair
+        for (auto it = loaded_image_pairs_.begin(); it != loaded_image_pairs_.end(); ++it)
         {
-          std::string error = "Failed to load image: " + queue_[queue_idx].source;
-          on_error_callbacks_.call(error);
+          const auto &[queue_idx, slot_pair] = *it;
+          if (slot_pair.first == slot_index || slot_pair.second == slot_index)
+          {
+            bool is_left = (slot_pair.first == slot_index);
+            const auto &source = is_left ? queue_[queue_idx].source_left : queue_[queue_idx].source_right;
+            std::string error = "Failed to load " + std::string(is_left ? "left" : "right") + " image: " + source;
+            on_error_callbacks_.call(error);
 
-          // Clear the mapping so we can retry
-          loaded_images_.erase(queue_idx);
-          break;
+            // Don't clear the mapping - allow partial pair to remain
+            return;
+          }
+        }
+
+        // Check if this slot belongs to a single
+        for (auto it = loaded_images_.begin(); it != loaded_images_.end(); ++it)
+        {
+          if (it->second == slot_index)
+          {
+            std::string error = "Failed to load image: " + queue_[it->first].source_left;
+            on_error_callbacks_.call(error);
+            loaded_images_.erase(it);
+            return;
+          }
+        }
+      }
+      else
+      {
+        // Find which queue index failed
+        for (const auto &[queue_idx, slot_idx] : loaded_images_)
+        {
+          if (slot_idx == slot_index)
+          {
+            std::string error = "Failed to load image: " + queue_[queue_idx].source_left;
+            on_error_callbacks_.call(error);
+
+            // Clear the mapping so we can retry
+            loaded_images_.erase(queue_idx);
+            break;
+          }
         }
       }
     }
@@ -348,7 +523,8 @@ namespace esphome
       for (const auto &src : sources)
       {
         QueueItem item;
-        item.source = src;
+        item.source_left = src;
+        item.source_right = ""; // Builder doesn't support pairs
         new_queue.push_back(item);
       }
 
@@ -368,6 +544,18 @@ namespace esphome
     }
 
     void SlideshowComponent::ensure_slots_loaded_()
+    {
+      if (pair_layout_)
+      {
+        ensure_paired_slots_loaded_();
+      }
+      else
+      {
+        ensure_single_slots_loaded_();
+      }
+    }
+
+    void SlideshowComponent::ensure_single_slots_loaded_()
     {
       if (queue_.empty() || image_slots_.empty())
       {
@@ -438,19 +626,156 @@ namespace esphome
       }
     }
 
+    void SlideshowComponent::ensure_paired_slots_loaded_()
+    {
+      if (queue_.empty() || image_slots_.size() < 2)
+      {
+        return;
+      }
+
+      size_t current_idx = current_index_ % queue_.size();
+      std::set<size_t> desired = {current_idx};
+
+      // Add prev/next if queue size permits
+      if (queue_.size() > 1)
+      {
+        desired.insert(retreat_index(current_idx, queue_.size()));
+        desired.insert(advance_index(current_idx, queue_.size()));
+      }
+
+      // Release items outside window
+      release_outside_window_(desired);
+
+      // Load missing items (1 or 2 slots per item)
+      for (size_t queue_idx : desired)
+      {
+        const auto &item = queue_[queue_idx];
+
+        if (item.is_paired())
+        {
+          if (!is_pair_loaded_(queue_idx))
+          {
+            load_pair_to_slots_(queue_idx);
+          }
+        }
+        else
+        {
+          if (!is_single_loaded_(queue_idx))
+          {
+            load_single_to_slot_(queue_idx);
+          }
+        }
+      }
+    }
+
+    bool SlideshowComponent::is_pair_loaded_(size_t queue_idx) const
+    {
+      return loaded_image_pairs_.count(queue_idx) > 0;
+    }
+
+    bool SlideshowComponent::is_single_loaded_(size_t queue_idx) const
+    {
+      return loaded_images_.count(queue_idx) > 0;
+    }
+
+    void SlideshowComponent::release_outside_window_(const std::set<size_t> &desired)
+    {
+      // Release singles
+      auto it_single = loaded_images_.begin();
+      while (it_single != loaded_images_.end())
+      {
+        if (desired.find(it_single->first) == desired.end())
+        {
+          release_slot_(it_single->second);
+          it_single = loaded_images_.erase(it_single);
+        }
+        else
+        {
+          ++it_single;
+        }
+      }
+
+      // Release pairs
+      auto it_pair = loaded_image_pairs_.begin();
+      while (it_pair != loaded_image_pairs_.end())
+      {
+        if (desired.find(it_pair->first) == desired.end())
+        {
+          release_slot_(it_pair->second.first);  // Left
+          release_slot_(it_pair->second.second); // Right
+          it_pair = loaded_image_pairs_.erase(it_pair);
+        }
+        else
+        {
+          ++it_pair;
+        }
+      }
+    }
+
+    void SlideshowComponent::load_single_to_slot_(size_t queue_idx)
+    {
+      size_t slot_idx = find_free_slot_();
+      if (slot_idx == SIZE_MAX)
+      {
+        ESP_LOGW(TAG, "No free slot for single image at index %d", queue_idx);
+        return;
+      }
+
+      const auto &item = queue_[queue_idx];
+      load_image_to_slot_(queue_idx, slot_idx, item.source_left);
+      loaded_images_[queue_idx] = slot_idx;
+    }
+
+    void SlideshowComponent::load_pair_to_slots_(size_t queue_idx)
+    {
+      size_t left_slot = find_free_slot_();
+      size_t right_slot = find_free_slot_();
+
+      if (left_slot == SIZE_MAX || right_slot == SIZE_MAX)
+      {
+        ESP_LOGW(TAG, "Insufficient slots for pair at index %d", queue_idx);
+        // Release left if we got it
+        if (left_slot != SIZE_MAX)
+        {
+          release_slot_(left_slot);
+        }
+        return;
+      }
+
+      const auto &item = queue_[queue_idx];
+      load_image_to_slot_(queue_idx, left_slot, item.source_left);
+      load_image_to_slot_(queue_idx, right_slot, item.source_right);
+
+      loaded_image_pairs_[queue_idx] = {left_slot, right_slot};
+    }
+
     size_t SlideshowComponent::find_free_slot_()
     {
       for (size_t i = 0; i < image_slots_.size(); i++)
       {
         size_t mod_i = (i + current_index_) % image_slots_.size();
-        // Check if slot is mapped to a queue index
         bool in_use = false;
+
+        // Check if slot is mapped to a single image
         for (const auto &[queue_idx, slot_idx] : loaded_images_)
         {
           if (slot_idx == mod_i)
           {
             in_use = true;
             break;
+          }
+        }
+
+        // Check if slot is mapped to a paired image
+        if (!in_use && pair_layout_)
+        {
+          for (const auto &[queue_idx, slot_pair] : loaded_image_pairs_)
+          {
+            if (slot_pair.first == mod_i || slot_pair.second == mod_i)
+            {
+              in_use = true;
+              break;
+            }
           }
         }
 
@@ -491,21 +816,29 @@ namespace esphome
       if (queue_index >= queue_.size() || slot_index >= image_slots_.size())
         return;
 
-      auto *slot = image_slots_[slot_index].get();
       const QueueItem &item = queue_[queue_index];
+      load_image_to_slot_(queue_index, slot_index, item.source_left);
+    }
 
-      ESP_LOGI(TAG, "Loading source '%s' into slot %d", item.source.c_str(), slot_index);
+    void SlideshowComponent::load_image_to_slot_(size_t queue_index, size_t slot_index, const std::string &source)
+    {
+      if (queue_index >= queue_.size() || slot_index >= image_slots_.size())
+        return;
 
-      loaded_images_[queue_index] = slot_index;
+      auto *slot = image_slots_[slot_index].get();
+
+      ESP_LOGI(TAG, "Loading source '%s' into slot %d (queue index %d)", source.c_str(), slot_index, queue_index);
+
       loading_slots_.insert(slot_index);
 
-      slot->set_source(item.source);
+      slot->set_source(source);
       slot->update();
 
       // Use weak callback to avoid dangling references
       slot->callback_once([this, slot_index](bool success)
                           {
         // Check if slot is still valid/loading before processing callback
+        // FIXME: handle pairs properly
         if (this->loading_slots_.find(slot_index) == this->loading_slots_.end()) {
           ESP_LOGD(TAG, "Ignoring callback for released slot %d", slot_index);
           return;
@@ -541,7 +874,7 @@ namespace esphome
           return false;
         }
       }
-      
+
       // All loading slot indices must be valid
       for (size_t slot_idx : loading_slots_)
       {
@@ -551,7 +884,7 @@ namespace esphome
           return false;
         }
       }
-      
+
       return true;
     }
 #endif

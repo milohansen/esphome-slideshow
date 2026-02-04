@@ -1,0 +1,208 @@
+# paired_example.yaml
+# Example configuration for ESPHome slideshow component with paired image support
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+substitutions:
+  url_left: "https://example.com/left.jpg"
+  url_right: "https://example.com/right.jpg"
+
+esphome:
+  name: paired-display
+
+esp32:
+  board: esp32-p4-evboard
+  flash_size: 16Mb
+  cpu_frequency: 360MHz
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_SPIRAM_XIP_FROM_PSRAM: "y"
+
+psram:
+  mode: hex
+  speed: 200MHz
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Required for online_image
+http_request:
+  timeout: 10s
+  useragent: esphome/slideshow
+
+# Placeholder image
+image:
+  - file: ${url_left}
+    id: loading_placeholder
+    type: RGB565
+    resize: 512x600
+
+# Create 6 online_image slots for paired slideshow (3 pairs with prev/current/next buffering)
+online_image:
+  - url: ${url_left}
+    id: slide_slot_0
+    type: RGB565
+    resize: 512x600
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(paired_slideshow).on_image_ready(0);
+    on_error:
+      - lambda: |-
+          id(paired_slideshow).on_image_error(0);
+
+  - url: ${url_right}
+    id: slide_slot_1
+    type: RGB565
+    resize: 512x600
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(paired_slideshow).on_image_ready(1);
+    on_error:
+      - lambda: |-
+          id(paired_slideshow).on_image_error(1);
+
+  - url: ${url_left}
+    id: slide_slot_2
+    type: RGB565
+    resize: 512x600
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(paired_slideshow).on_image_ready(2);
+    on_error:
+      - lambda: |-
+          id(paired_slideshow).on_image_error(2);
+
+  - url: ${url_right}
+    id: slide_slot_3
+    type: RGB565
+    resize: 512x600
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(paired_slideshow).on_image_ready(3);
+    on_error:
+      - lambda: |-
+          id(paired_slideshow).on_image_error(3);
+
+  - url: ${url_left}
+    id: slide_slot_4
+    type: RGB565
+    resize: 512x600
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(paired_slideshow).on_image_ready(4);
+    on_error:
+      - lambda: |-
+          id(paired_slideshow).on_image_error(4);
+
+  - url: ${url_right}
+    id: slide_slot_5
+    type: RGB565
+    resize: 512x600
+    format: JPEG
+    placeholder: loading_placeholder
+    on_download_finished:
+      - lambda: |-
+          id(paired_slideshow).on_image_ready(5);
+    on_error:
+      - lambda: |-
+          id(paired_slideshow).on_image_error(5);
+
+# The slideshow component with paired mode enabled
+slideshow:
+  id: paired_slideshow
+  pair_layout: true  # Enable support for paired images
+
+  advance_interval: 10min
+  refresh_interval: 60min
+
+  image_slots:
+    - slide_slot_0
+    - slide_slot_1
+    - slide_slot_2
+    - slide_slot_3
+    - slide_slot_4
+    - slide_slot_5
+  image_slot_count: 6
+
+  on_advance:
+    - lambda: |-
+        ESP_LOGI("slideshow", "Advanced to index %d", x);
+        if (id(paired_slideshow).is_current_paired()) {
+          ESP_LOGI("slideshow", "Current item is a pair");
+        } else {
+          ESP_LOGI("slideshow", "Current item is single");
+        }
+
+  on_image_ready:
+    - lambda: |-
+        size_t idx = index;
+        bool success_val = success;
+        bool is_left_val = is_left;
+        bool is_paired_val = is_paired;
+        
+        if (is_paired_val) {
+          ESP_LOGI("slideshow", "%s image ready at index %d", 
+                   is_left_val ? "Left" : "Right", idx);
+          
+          // Check if both images in pair are ready
+          if (!is_left_val) {  // Right image just loaded
+            auto* left = id(paired_slideshow).get_current_image();
+            auto* right = id(paired_slideshow).get_current_right_image();
+            
+            if (left && right) {
+              ESP_LOGI("slideshow", "Both images ready - can render pair side-by-side");
+              // TODO: Render left image at (0, 0) and right image at (512, 0)
+              // it.image(0, 0, left->get_image());
+              // it.image(512, 0, right->get_image());
+            }
+          }
+        } else {
+          ESP_LOGI("slideshow", "Single image ready at index %d", idx);
+          auto* img = id(paired_slideshow).get_current_image();
+          if (img) {
+            ESP_LOGI("slideshow", "Can render single image full-width");
+            // TODO: Render single image at (0, 0) full width
+            // it.image(0, 0, img->get_image());
+          }
+        }
+
+  on_queue_updated:
+    - lambda: |-
+        ESP_LOGI("slideshow", "Queue updated: %d items", x);
+
+  on_error:
+    - lambda: |-
+        ESP_LOGE("slideshow", "Error: %s", x.c_str());
+
+  on_refresh:
+    then:
+      # Example: Fetch mixed single and paired images
+      - lambda: |-
+          std::vector<std::string> items = {
+            "https://example.com/single1.jpg",
+            "https://example.com/left2.jpg|https://example.com/right2.jpg",
+            "https://example.com/single3.jpg",
+            "https://example.com/left4.jpg|https://example.com/right4.jpg"
+          };
+          id(paired_slideshow).enqueue(items);
+
+logger:
+  level: DEBUG
+  logs:
+    slideshow: DEBUG
+    online_image: DEBUG

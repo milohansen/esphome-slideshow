@@ -124,8 +124,6 @@ online_image:
 slideshow:
   id: my_slideshow
 
-  placeholder: loading_placeholder
-
   advance_interval: 10min
   refresh_interval: 60min
 

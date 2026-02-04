@@ -88,7 +88,18 @@ namespace esphome
 
     struct QueueItem
     {
-      std::string source;
+      std::string source_left;   // Always used: single image URL or left side URL
+      std::string source_right;  // Empty for singles, populated for pairs
+      
+      // Helper to determine if this item is a pair
+      [[nodiscard]] bool is_paired() const { 
+        return !source_right.empty(); 
+      }
+      
+      // Helper to get slot requirement
+      [[nodiscard]] size_t slot_count() const {
+        return is_paired() ? 2 : 1;
+      }
     };
 
     using queue_builder_t = std::function<std::vector<std::string>()>;
@@ -119,6 +130,7 @@ namespace esphome
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
       void set_refresh_interval(uint32_t ms) { refresh_interval_ = ms; }
       void set_slot_count(size_t count) { slot_count_ = count; }
+      void set_pair_layout(bool enabled) { pair_layout_ = enabled; }
 
       void set_queue_builder(queue_builder_t &&builder) { queue_builder_ = builder; }
 
@@ -147,6 +159,11 @@ namespace esphome
       [[nodiscard]] size_t queue_size() const { return queue_.size(); }
       SlideshowSlot *get_current_image();
       SlideshowSlot *get_slot(size_t slot_index);
+      
+      // Paired mode accessors
+      SlideshowSlot *get_current_right_image();
+      [[nodiscard]] bool is_current_paired() const;
+      [[nodiscard]] bool is_pair_layout() const { return pair_layout_; }
 
       void enqueue(const std::vector<std::string> &items);
       void clear_queue(); // Optional utility
@@ -160,7 +177,7 @@ namespace esphome
       {
         on_advance_callbacks_.add(std::move(callback));
       }
-      void add_on_image_ready_callback(std::function<void(size_t, bool)> &&callback)
+      void add_on_image_ready_callback(std::function<void(size_t, bool, bool, bool)> &&callback)
       {
         on_image_ready_callbacks_.add(std::move(callback));
       }
@@ -183,10 +200,20 @@ namespace esphome
 
       // Slot management
       void ensure_slots_loaded_();
+      void ensure_single_slots_loaded_();
+      void ensure_paired_slots_loaded_();
       [[nodiscard]] size_t find_free_slot_();
       void release_slot_(size_t slot_index);
       void load_image_to_slot_(size_t queue_index, size_t slot_index);
+      void load_image_to_slot_(size_t queue_index, size_t slot_index, const std::string &source);
       [[nodiscard]] bool is_slot_loading_(size_t slot_index) const;
+      
+      // Paired mode helpers
+      [[nodiscard]] bool is_pair_loaded_(size_t queue_idx) const;
+      [[nodiscard]] bool is_single_loaded_(size_t queue_idx) const;
+      void release_outside_window_(const std::set<size_t> &desired);
+      void load_single_to_slot_(size_t queue_idx);
+      void load_pair_to_slots_(size_t queue_idx);
       
       // Index manipulation helpers
       [[nodiscard]] size_t advance_index(size_t current, size_t queue_size) const {
@@ -207,6 +234,7 @@ namespace esphome
       uint32_t refresh_interval_{25};
       bool paused_{false};
       bool suspended_{false};
+      bool pair_layout_{false};  // Enable support for paired images
 
       bool needs_more_photos_{false};
       bool slots_dirty_{true}; // Flag to track if slots need reloading
@@ -222,8 +250,10 @@ namespace esphome
       std::vector<std::unique_ptr<SlideshowSlot>> image_slots_;
       size_t slot_count_{0};
 
-      // Mapping: queue_index -> slot_index
+      // Mapping: queue_index -> slot_index (for single images)
       std::map<size_t, size_t> loaded_images_;
+      // Mapping: queue_index -> [left_slot_idx, right_slot_idx] (for paired images)
+      std::map<size_t, std::pair<size_t, size_t>> loaded_image_pairs_;
       std::set<size_t> loading_slots_;
 
       // Timing
@@ -232,7 +262,7 @@ namespace esphome
 
       // Callbacks
       CallbackManager<void(size_t)> on_advance_callbacks_;
-      CallbackManager<void(size_t, bool)> on_image_ready_callbacks_;
+      CallbackManager<void(size_t, bool, bool, bool)> on_image_ready_callbacks_;
       CallbackManager<void(size_t)> on_queue_updated_callbacks_;
       CallbackManager<void(std::string)> on_error_callbacks_;
       CallbackManager<void(size_t)> on_refresh_callbacks_;
@@ -249,13 +279,13 @@ namespace esphome
       }
     };
 
-    class OnImageReadyTrigger : public Trigger<size_t, bool>
+    class OnImageReadyTrigger : public Trigger<size_t, bool, bool, bool>
     {
     public:
       explicit OnImageReadyTrigger(SlideshowComponent *parent)
       {
-        parent->add_on_image_ready_callback([this](size_t index, bool cached)
-                                            { this->trigger(index, cached); });
+        parent->add_on_image_ready_callback([this](size_t index, bool success, bool is_left, bool is_paired)
+                                            { this->trigger(index, success, is_left, is_paired); });
       }
     };
 

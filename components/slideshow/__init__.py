@@ -22,6 +22,7 @@ CONF_ADVANCE_INTERVAL = "advance_interval"
 CONF_REFRESH_INTERVAL = "refresh_interval"
 CONF_IMAGE_SLOTS = "image_slots"
 CONF_IMAGE_SLOT_COUNT = "image_slot_count"
+CONF_PAIR_LAYOUT = "pair_layout"
 CONF_ON_ADVANCE = "on_advance"
 CONF_ON_IMAGE_READY = "on_image_ready"
 CONF_ON_QUEUE_UPDATED = "on_queue_updated"
@@ -69,6 +70,7 @@ CONFIG_SCHEMA = cv.Schema({
 
     cv.Optional(CONF_ADVANCE_INTERVAL): cv.positive_time_period_minutes,
     cv.Optional(CONF_REFRESH_INTERVAL): cv.positive_time_period_minutes,
+    cv.Optional(CONF_PAIR_LAYOUT): cv.boolean,
 
     cv.Required(CONF_IMAGE_SLOTS): cv.ensure_list(validate_image_slot),
     cv.Required(CONF_IMAGE_SLOT_COUNT): cv.positive_int,
@@ -99,6 +101,7 @@ async def to_code(config):
     cg.add(var.set_advance_interval(config.get(CONF_ADVANCE_INTERVAL, 5)))
     cg.add(var.set_refresh_interval(config.get(CONF_REFRESH_INTERVAL, 25)))
     cg.add(var.set_slot_count(config[CONF_IMAGE_SLOT_COUNT]))
+    cg.add(var.set_pair_layout(config.get(CONF_PAIR_LAYOUT, False)))
 
     # Add image slots - the overloaded add_image_slot method handles type detection
     for slot_id in config[CONF_IMAGE_SLOTS]:
@@ -114,7 +117,11 @@ async def to_code(config):
     for conf in config.get(CONF_ON_IMAGE_READY, []):
         trigger = cg.new_Pvariable(conf[automation.CONF_TRIGGER_ID], var)
         await automation.build_automation(
-            trigger, [(cg.size_t, "index"), (cg.bool_, "cached")], conf
+            trigger, [
+                (cg.size_t, "index"),
+                (cg.bool_, "is_left"),
+                (cg.bool_, "is_paired")
+            ], conf
         )
 
     for conf in config.get(CONF_ON_QUEUE_UPDATED, []):
