@@ -204,6 +204,9 @@ namespace esphome
 
       ESP_LOGI(TAG, "Enqueuing %d new items", items.size());
 
+      // Optimization: Reserve space in the queue to avoid multiple reallocations
+      queue_.reserve(queue_.size() + items.size());
+
       size_t valid_count = 0;
       for (const auto &str : items)
       {
@@ -365,22 +368,58 @@ namespace esphome
         return;
       }
 
-      size_t current_idx = current_index_ % queue_.size();
-      std::set<size_t> desired = {current_idx};
+      const size_t queue_size = queue_.size();
+      const size_t current_idx = current_index_ % queue_size;
 
-      // Add prev/next if queue size permits
-      if (queue_.size() > 1)
+      // Optimization: Use a fixed-size array on the stack instead of std::set
+      // to avoid heap allocations during window management.
+      size_t desired[3];
+      uint8_t num_desired = 0;
+
+      desired[num_desired++] = current_idx;
+      if (queue_size > 1)
       {
-        desired.insert(retreat_index(current_idx, queue_.size()));
-        desired.insert(advance_index(current_idx, queue_.size()));
+        size_t prev = retreat_index(current_idx, queue_size);
+        if (prev != current_idx)
+        {
+          desired[num_desired++] = prev;
+        }
+        size_t next = advance_index(current_idx, queue_size);
+        if (next != current_idx && next != prev)
+        {
+          desired[num_desired++] = next;
+        }
       }
 
-      // Release items outside window
-      release_outside_window_(desired);
+      // Release items outside the sliding window
+      auto it = loaded_images_.begin();
+      while (it != loaded_images_.end())
+      {
+        bool is_desired = false;
+        for (uint8_t i = 0; i < num_desired; i++)
+        {
+          if (it->first == desired[i])
+          {
+            is_desired = true;
+            break;
+          }
+        }
+
+        if (!is_desired)
+        {
+          release_slot_(it->second);
+          it = loaded_images_.erase(it);
+        }
+        else
+        {
+          ++it;
+        }
+      }
 
       // Load missing items (1 or 2 slots per item)
-      for (size_t queue_idx : desired)
+      for (uint8_t i = 0; i < num_desired; i++)
       {
+        size_t queue_idx = desired[i];
         const auto &item = queue_[queue_idx];
 
         if (item.is_paired())
@@ -402,34 +441,23 @@ namespace esphome
 
     bool SlideshowComponent::is_slot_loaded_(size_t queue_idx, size_t needed) const
     {
-      return loaded_images_.contains(queue_idx) && (needed == 1 || (needed == 2 && loaded_images_.at(queue_idx).second != SIZE_MAX));
+      return loaded_images_.count(queue_idx) > 0 && (needed == 1 || (needed == 2 && loaded_images_.at(queue_idx).second != INVALID_SLOT));
     }
 
     void SlideshowComponent::release_outside_window_(const std::set<size_t> &desired)
     {
-      auto it = loaded_images_.begin();
-      while (it != loaded_images_.end())
-      {
-        if (desired.find(it->first) == desired.end())
-        {
-          release_slot_(it->second);
-          it = loaded_images_.erase(it);
-        }
-        else
-        {
-          ++it;
-        }
-      }
+      // Deprecated: Logic moved into ensure_slots_loaded_ for performance
     }
 
-    void SlideshowComponent::load_to_slots_(size_t queue_idx, size_t needed = 1)
+    void SlideshowComponent::load_to_slots_(size_t queue_idx, size_t needed)
     {
       std::vector<size_t> slots;
       slots.reserve(needed);
+      uint64_t skip_mask = 0;
       for (size_t i = 0; i < needed; i++)
       {
-        size_t slot = find_free_slot_();
-        if (slot == SIZE_MAX)
+        size_t slot = find_free_slot_(skip_mask);
+        if (slot == INVALID_SLOT)
         {
           ESP_LOGW(TAG, "Insufficient slots for item at index %d", queue_idx);
           // Release any previously acquired slots
@@ -440,13 +468,14 @@ namespace esphome
           return;
         }
         slots.push_back(slot);
+        skip_mask |= (1ULL << (slot % 64));
       }
 
       const auto &item = queue_[queue_idx];
       if (needed == 1)
       {
         load_image_to_slot_(slots[0], item.source_left, ImagePosition::SINGLE);
-        loaded_images_[queue_idx] = {slots[0], SIZE_MAX};
+        loaded_images_[queue_idx] = {slots[0], INVALID_SLOT};
         return;
       }
       load_image_to_slot_(slots[0], item.source_left, ImagePosition::PAIR_A);
@@ -454,43 +483,44 @@ namespace esphome
       loaded_images_[queue_idx] = {slots[0], slots[1]};
     }
 
-    size_t SlideshowComponent::find_free_slot_()
+    size_t SlideshowComponent::find_free_slot_(uint64_t skip_mask)
     {
-      for (size_t i = 0; i < image_slots_.size(); i++)
+      const size_t num_slots = image_slots_.size();
+      // Optimization: Use a bitmask to track in-use slots.
+      // This reduces complexity from O(S * L) to O(S + L), where S is num_slots and L is num_loaded.
+      // Note: Supports up to 64 slots, which is well beyond ESP32 PSRAM limits for images.
+      uint64_t in_use_mask = skip_mask;
+
+      for (const auto &[queue_idx, slot_pair] : loaded_images_)
       {
-        size_t mod_i = (i + current_index_) % image_slots_.size();
-        bool in_use = false;
+        if (slot_pair.first != INVALID_SLOT)
+          in_use_mask |= (1ULL << (slot_pair.first % 64));
+        if (slot_pair.second != INVALID_SLOT)
+          in_use_mask |= (1ULL << (slot_pair.second % 64));
+      }
 
-        for (const auto &[queue_idx, slot_pair] : loaded_images_)
-        {
-          if (slot_pair.first == mod_i || slot_pair.second == mod_i)
-          {
-            in_use = true;
-            break;
-          }
-        }
+      for (const auto &[slot_idx, count] : loading_slots_)
+      {
+        in_use_mask |= (1ULL << (slot_idx % 64));
+      }
 
-        // Check if slot is currently loading
-        if (loading_slots_.find(mod_i) != loading_slots_.end())
-        {
-          in_use = true;
-        }
-
-        if (!in_use)
+      for (size_t i = 0; i < num_slots; i++)
+      {
+        size_t mod_i = (i + current_index_) % num_slots;
+        if (!(in_use_mask & (1ULL << (mod_i % 64))))
         {
           return mod_i;
         }
       }
 
-      return SIZE_MAX; // No free slot
+      return INVALID_SLOT;
     }
 
     void SlideshowComponent::release_slot_(std::pair<size_t, size_t> pair)
     {
       release_slot_(pair.first);
-      if (pair.second != SIZE_MAX)
+      if (pair.second != INVALID_SLOT)
       {
-
         release_slot_(pair.second);
       }
     }

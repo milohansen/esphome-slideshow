@@ -181,7 +181,7 @@ namespace esphome
     protected:
       // Slot management
       void ensure_slots_loaded_();
-      [[nodiscard]] size_t find_free_slot_();
+      [[nodiscard]] size_t find_free_slot_(uint64_t skip_mask = 0);
       void release_slot_(std::pair<size_t, size_t> pair);
       void release_slot_(size_t slot_index);
       void load_image_to_slot_(size_t slot_index, const std::string &source, ImagePosition position = ImagePosition::SINGLE);
