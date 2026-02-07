@@ -10,7 +10,7 @@ substitutions:
   url: "https://storage.googleapis.com/milo-image-storage/processed/monotych/1024x600/03cf4498e532217ef6c9e1e2188f12fff7891914efcfb766f2baa5b7f0eb46fb.jpg"
 
 esphome:
-  name: living-room-display
+  name: slideshow-example
 
 esp32:
   board: esp32-p4-evboard
@@ -87,12 +87,12 @@ online_image:
     resize: 1024x600
     format: JPEG
     placeholder: loading_placeholder
-    on_download_finished:
-      - lambda: |-
-          id(my_slideshow).on_image_ready(0);
-    on_error:
-      - lambda: |-
-          id(my_slideshow).on_image_error(0);
+    # on_download_finished:
+    #   - lambda: |-
+    #       id(my_slideshow).on_image_ready(0);
+    # on_error:
+    #   - lambda: |-
+    #       id(my_slideshow).on_image_error(0);
 
   - url: ${url}
     id: slide_slot_1
@@ -100,12 +100,12 @@ online_image:
     resize: 1024x600
     format: JPEG
     placeholder: loading_placeholder
-    on_download_finished:
-      - lambda: |-
-          id(my_slideshow).on_image_ready(1);
-    on_error:
-      - lambda: |-
-          id(my_slideshow).on_image_error(1);
+    # on_download_finished:
+    #   - lambda: |-
+    #       id(my_slideshow).on_image_ready(1);
+    # on_error:
+    #   - lambda: |-
+    #       id(my_slideshow).on_image_error(1);
 
   - url: ${url}
     id: slide_slot_2
@@ -113,18 +113,16 @@ online_image:
     resize: 1024x600
     format: JPEG
     placeholder: loading_placeholder
-    on_download_finished:
-      - lambda: |-
-          id(my_slideshow).on_image_ready(2);
-    on_error:
-      - lambda: |-
-          id(my_slideshow).on_image_error(2);
+    # on_download_finished:
+    #   - lambda: |-
+    #       id(my_slideshow).on_image_ready(2);
+    # on_error:
+    #   - lambda: |-
+    #       id(my_slideshow).on_image_error(2);
 
 # The slideshow component orchestrates the image slots
 slideshow:
   id: my_slideshow
-
-  placeholder: loading_placeholder
 
   advance_interval: 10min
   refresh_interval: 60min
@@ -133,7 +131,6 @@ slideshow:
     - slide_slot_0
     - slide_slot_1
     - slide_slot_2
-  image_slot_count: 3
 
   on_advance:
     - lambda: |-

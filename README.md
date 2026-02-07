@@ -12,6 +12,7 @@ A smart slideshow component for ESPHome that orchestrates multiple image slots (
 - ⏮️ **Bidirectional**: Support for both advance and previous.
 - 🎯 **Generic Slots**: Abstract interface allowing mix-and-match of image components.
 - 🎨 **LVGL Ready**: Easy integration with LVGL displays.
+- 🖼️ **Paired Images**: Display side-by-side image pairs with mixed single and paired content support.
 
 ## Directory Structure
 
@@ -142,6 +143,72 @@ script:
                   id(my_slideshow).enqueue(new_items);
 ```
 
+### Paired Mode: Side-by-Side Images
+
+Enable `pair_layout: true` to support displaying two images side-by-side. In this mode, the queue can contain a mix of single images and paired images (separated by `|`).
+
+```yaml
+slideshow:
+  id: my_slideshow
+  pair_layout: true  # Enable paired image support
+  
+  # Note: Need more slots for paired mode (recommend 6 for smooth transitions)
+  image_slots:
+    - slot0
+    - slot1
+    - slot2
+    - slot3
+    - slot4
+    - slot5
+  image_slot_count: 6
+  
+  on_refresh:
+    then:
+      - slideshow.enqueue:
+          items: !lambda |-
+            return {
+              "https://example.com/single1.jpg",                      // Single image
+              "https://example.com/left.jpg|https://example.com/right.jpg",  // Paired images
+              "https://example.com/single2.jpg",                      // Single image
+              "https://example.com/left2.jpg|https://example.com/right2.jpg" // Paired images
+            };
+  
+  on_image_ready:
+    - lambda: |-
+        size_t idx = index;
+        bool is_left_side = is_left;
+        bool is_paired_item = is_paired;
+        
+        if (is_paired_item) {
+          // Handle paired image loading
+          if (!is_left_side) {  // Both images should be ready when right finishes
+            auto* left = id(my_slideshow).get_current_image();
+            auto* right = id(my_slideshow).get_current_right_image();
+            
+            if (left && right) {
+              // Render side-by-side
+              it.image(0, 0, left->get_image());     // Left half
+              it.image(512, 0, right->get_image());  // Right half
+            }
+          }
+        } else {
+          // Handle single image
+          auto* img = id(my_slideshow).get_current_image();
+          if (img) {
+            it.image(0, 0, img->get_image());  // Full width
+          }
+        }
+```
+
+**Key points:**
+- Use `|` to separate left and right image URLs in the queue
+- `on_image_ready` receives 3 parameters: `(index, is_left, is_paired)`
+- Check `is_current_paired()` to determine if current item is a pair
+- Use `get_current_image()` for left/single image, `get_current_right_image()` for right image
+- Missing right image (partial pair) is supported - `get_current_right_image()` returns `nullptr`
+
+See [examples/paired_example.yaml](examples/paired_example.yaml) for a complete configuration.
+
 ## Actions
 
 ### `slideshow.enqueue`
@@ -236,4 +303,22 @@ bool paused = id(my_slideshow).is_paused();
 std::vector<std::string> items = {"url1", "url2"};
 id(my_slideshow).enqueue(items);
 
+// Paired mode specific APIs
+if (id(my_slideshow).is_pair_layout()) {
+  // Check if current item is a pair
+  if (id(my_slideshow).is_current_paired()) {
+    auto *left = id(my_slideshow).get_current_image();
+    auto *right = id(my_slideshow).get_current_right_image();
+    
+    if (left && right) {
+      // Render side-by-side
+      it.image(0, 0, left->get_image());
+      it.image(512, 0, right->get_image());
+    }
+  } else {
+    // Current item is single, even in paired mode
+    auto *img = id(my_slideshow).get_current_image();
+    it.image(0, 0, img->get_image());
+  }
+}
 ```

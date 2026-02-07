@@ -12,7 +12,6 @@
 #include <set>
 #include <memory>
 #include <algorithm>
-#include <cctype>
 
 namespace esphome
 {
@@ -34,14 +33,6 @@ namespace esphome
         {
           cb(arg);
         }
-      }
-      size_t size() const { return callbacks_.size(); }
-
-      bool empty() const { return callbacks_.empty(); }
-
-      void clear()
-      {
-        callbacks_.clear();
       }
 
     protected:
@@ -88,10 +79,23 @@ namespace esphome
 
     struct QueueItem
     {
-      std::string source;
+      std::string source_left;   // Always used: single image URL or left side URL
+      std::string source_right;  // Empty for singles, populated for pairs
+      
+      // Helper to determine if this item is a pair
+      [[nodiscard]] bool is_paired() const { 
+        return !source_right.empty(); 
+      }
     };
 
-    using queue_builder_t = std::function<std::vector<std::string>()>;
+
+
+    enum class ImagePosition
+    {
+      SINGLE,
+      PAIR_A,
+      PAIR_B
+    };
 
     /**
      * @brief Main slideshow component that manages image display rotation.
@@ -118,9 +122,7 @@ namespace esphome
       // Configuration
       void set_advance_interval(uint32_t ms) { advance_interval_ = ms; }
       void set_refresh_interval(uint32_t ms) { refresh_interval_ = ms; }
-      void set_slot_count(size_t count) { slot_count_ = count; }
-
-      void set_queue_builder(queue_builder_t &&builder) { queue_builder_ = builder; }
+      void set_pair_layout(bool enabled) { pair_layout_ = enabled; }
 
       void add_image_slot(online_image::OnlineImage *slot);
       void add_image_slot(esphome::image::Image *slot);
@@ -145,22 +147,21 @@ namespace esphome
       [[nodiscard]] size_t current_index() const { return current_index_; }
       [[nodiscard]] bool is_paused() const { return paused_; }
       [[nodiscard]] size_t queue_size() const { return queue_.size(); }
-      SlideshowSlot *get_current_image();
-      SlideshowSlot *get_slot(size_t slot_index);
+      [[nodiscard]] bool is_pair_layout() const { return pair_layout_; }
 
       void enqueue(const std::vector<std::string> &items);
       void clear_queue(); // Optional utility
 
       // Called by online_image callbacks
-      void on_image_ready(size_t slot_index);
-      void on_image_error(size_t slot_index);
+      void on_image_ready(size_t slot_index, ImagePosition position);
+      void on_image_error(size_t slot_index, ImagePosition position);
 
       // Callbacks
       void add_on_advance_callback(std::function<void(size_t)> &&callback)
       {
         on_advance_callbacks_.add(std::move(callback));
       }
-      void add_on_image_ready_callback(std::function<void(size_t, bool)> &&callback)
+      void add_on_image_ready_callback(std::function<void(size_t, bool, bool)> &&callback)
       {
         on_image_ready_callbacks_.add(std::move(callback));
       }
@@ -178,15 +179,19 @@ namespace esphome
       }
 
     protected:
-      // Queue management
-      void update_queue_from_builder_();
-
       // Slot management
       void ensure_slots_loaded_();
-      [[nodiscard]] size_t find_free_slot_();
+      [[nodiscard]] size_t find_free_slot_(uint64_t skip_mask = 0);
+      void release_slot_(std::pair<size_t, size_t> pair);
       void release_slot_(size_t slot_index);
-      void load_image_to_slot_(size_t queue_index, size_t slot_index);
+      void load_image_to_slot_(size_t slot_index, const std::string &source, ImagePosition position = ImagePosition::SINGLE);
       [[nodiscard]] bool is_slot_loading_(size_t slot_index) const;
+      
+      // Paired mode helpers
+      [[nodiscard]] bool is_slot_loaded_(size_t queue_idx, size_t needed = 1) const;
+
+      void release_outside_window_(const std::set<size_t> &desired);
+      void load_to_slots_(size_t queue_idx, size_t needed);
       
       // Index manipulation helpers
       [[nodiscard]] size_t advance_index(size_t current, size_t queue_size) const {
@@ -196,23 +201,16 @@ namespace esphome
       [[nodiscard]] size_t retreat_index(size_t current, size_t queue_size) const {
         return queue_size > 0 ? (current + queue_size - 1) % queue_size : 0;
       }
-      
-#ifndef NDEBUG
-      /// Validates internal invariants (debug builds only)
-      [[nodiscard]] bool check_slot_invariants_() const;
-#endif
 
       // State
       uint32_t advance_interval_{5};
       uint32_t refresh_interval_{25};
       bool paused_{false};
       bool suspended_{false};
+      bool pair_layout_{false};  // Enable support for paired images
 
       bool needs_more_photos_{false};
       bool slots_dirty_{true}; // Flag to track if slots need reloading
-
-      // The Builder Lambda
-      queue_builder_t queue_builder_;
 
       // Queue data
       std::vector<QueueItem> queue_;
@@ -220,19 +218,15 @@ namespace esphome
 
       // Image slots
       std::vector<std::unique_ptr<SlideshowSlot>> image_slots_;
-      size_t slot_count_{0};
 
-      // Mapping: queue_index -> slot_index
-      std::map<size_t, size_t> loaded_images_;
-      std::set<size_t> loading_slots_;
-
-      // Timing
-      uint32_t last_advance_{0};
-      uint32_t last_refresh_{0};
+      // Mapping: queue_index -> slot_index (for single images)
+      std::map<size_t, std::pair<size_t, size_t>> loaded_images_;
+      // Mapping: slot_index -> loading count
+      std::map<size_t, size_t> loading_slots_;
 
       // Callbacks
       CallbackManager<void(size_t)> on_advance_callbacks_;
-      CallbackManager<void(size_t, bool)> on_image_ready_callbacks_;
+      CallbackManager<void(size_t, bool, bool)> on_image_ready_callbacks_;
       CallbackManager<void(size_t)> on_queue_updated_callbacks_;
       CallbackManager<void(std::string)> on_error_callbacks_;
       CallbackManager<void(size_t)> on_refresh_callbacks_;
@@ -249,13 +243,13 @@ namespace esphome
       }
     };
 
-    class OnImageReadyTrigger : public Trigger<size_t, bool>
+    class OnImageReadyTrigger : public Trigger<size_t, bool, bool>
     {
     public:
       explicit OnImageReadyTrigger(SlideshowComponent *parent)
       {
-        parent->add_on_image_ready_callback([this](size_t index, bool cached)
-                                            { this->trigger(index, cached); });
+        parent->add_on_image_ready_callback([this](size_t index, bool is_left, bool is_paired)
+                                            { this->trigger(index, is_left, is_paired); });
       }
     };
 

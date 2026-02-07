@@ -20,10 +20,6 @@ namespace esphome
     public:
       explicit LocalImageSlot(local_image::LocalImage *img) : img_(img)
       {
-        if (!img_) {
-          ESP_LOGE("slideshow", "LocalImageSlot: null image pointer");
-          return;
-        }
         this->img_->add_on_finished_callback([this](bool success)
                                              { this->callbacks_.call(true); });
         this->img_->add_on_error_callback([this]()
