@@ -29,16 +29,24 @@ struct QueueItem {
 
 **State Variables**:
 - `bool pair_layout_` - Configuration flag to enable paired mode
-- `std::map<size_t, std::pair<size_t, size_t>> loaded_image_pairs_` - Maps queue index to [left_slot, right_slot]
-- Existing `loaded_images_` map continues to handle single images
+- `std::map<size_t, std::pair<size_t, size_t>> loaded_images_` - Maps queue index to `(left_slot, right_slot)`
+  - For single images, `right_slot` is set to `INVALID_SLOT`
+  - For pairs, both `left_slot` and `right_slot` are valid slot indices while loaded
 
 ### Slot Management
 
-The component now supports two loading strategies:
+A single loading path manages both single and paired items:
 
-1. **Single Mode** (`pair_layout_=false`): Original behavior, uses `ensure_single_slots_loaded_()`
-2. **Paired Mode** (`pair_layout_=true`): New behavior, uses `ensure_paired_slots_loaded_()`
+- Maintains a sliding window of queue indices (prev/current/next)
+- For each index in the window:
+  - Ensures the left image is loaded into a slot
+  - If the item is paired (`is_paired()`), ensures the right image is loaded into a second slot
+  - Records the resulting `(left_slot, right_slot_or_INVALID_SLOT)` in `loaded_images_`
+- Releases any slots (and removes entries from `loaded_images_`) for indices that fall outside the window
 
+**Paired mode specifics**:
+- `pair_layout_` controls how the two slots for a paired item are rendered (side-by-side layout)
+- Singles and pairs share the same caching and eviction logic; only the number of active slots per item differs
 **Paired mode logic**:
 - Iterates through desired queue indices (prev/current/next)
 - For each item, checks if it's paired via `is_paired()`
