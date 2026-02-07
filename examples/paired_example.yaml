@@ -151,7 +151,6 @@ slideshow:
   on_image_ready:
     - lambda: |-
         size_t idx = index;
-        bool success_val = success;
         bool is_left_val = is_left;
         bool is_paired_val = is_paired;
         
