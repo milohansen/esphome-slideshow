@@ -202,7 +202,7 @@ slideshow:
 
 **Key points:**
 - Use `|` to separate left and right image URLs in the queue
-- `on_image_ready` receives 4 parameters: `(index, success, is_left, is_paired)`
+- `on_image_ready` receives 3 parameters: `(index, is_left, is_paired)`
 - Check `is_current_paired()` to determine if current item is a pair
 - Use `get_current_image()` for left/single image, `get_current_right_image()` for right image
 - Missing right image (partial pair) is supported - `get_current_right_image()` returns `nullptr`
