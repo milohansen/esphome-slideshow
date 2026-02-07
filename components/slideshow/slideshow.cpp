@@ -363,7 +363,8 @@ namespace esphome
 
     void SlideshowComponent::ensure_slots_loaded_()
     {
-      if (queue_.empty() || image_slots_.size() < 2)
+      // Require at least one slot in all modes, and at least two only when using paired layout.
+      if (queue_.empty() || image_slots_.empty() || (pair_layout_ && image_slots_.size() < 2))
       {
         return;
       }
